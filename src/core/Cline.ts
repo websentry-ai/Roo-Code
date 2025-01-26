@@ -809,7 +809,7 @@ export class Cline {
 			})
 		}
 
-		const { browserViewportSize, mode, customPrompts, preferredLanguage } =
+		const { browserViewportSize, mode, customModePrompts, preferredLanguage } =
 			(await this.providerRef.deref()?.getState()) ?? {}
 		const { customModes } = (await this.providerRef.deref()?.getState()) ?? {}
 		const systemPrompt = await (async () => {
@@ -825,7 +825,7 @@ export class Cline {
 				this.diffStrategy,
 				browserViewportSize,
 				mode,
-				customPrompts,
+				customModePrompts,
 				customModes,
 				this.customInstructions,
 				preferredLanguage,
@@ -1022,6 +1022,8 @@ export class Cline {
 							return `[${block.name} for '${block.params.question}']`
 						case "attempt_completion":
 							return `[${block.name}]`
+						case "switch_mode":
+							return `[${block.name} to '${block.params.mode_slug}'${block.params.reason ? ` because: ${block.params.reason}` : ""}]`
 					}
 				}
 
@@ -1143,12 +1145,17 @@ export class Cline {
 				}
 
 				// Validate tool use before execution
-				const { mode } = (await this.providerRef.deref()?.getState()) ?? {}
-				const { customModes } = (await this.providerRef.deref()?.getState()) ?? {}
+				const { mode, customModes } = (await this.providerRef.deref()?.getState()) ?? {}
 				try {
-					validateToolUse(block.name as ToolName, mode ?? defaultModeSlug, customModes ?? [], {
-						apply_diff: this.diffEnabled,
-					})
+					validateToolUse(
+						block.name as ToolName,
+						mode ?? defaultModeSlug,
+						customModes ?? [],
+						{
+							apply_diff: this.diffEnabled,
+						},
+						block.params,
+					)
 				} catch (error) {
 					this.consecutiveMistakeCount++
 					pushToolResult(formatResponse.toolError(error.message))
@@ -2006,6 +2013,73 @@ export class Cline {
 							break
 						}
 					}
+					case "switch_mode": {
+						const mode_slug: string | undefined = block.params.mode_slug
+						const reason: string | undefined = block.params.reason
+						try {
+							if (block.partial) {
+								const partialMessage = JSON.stringify({
+									tool: "switchMode",
+									mode: removeClosingTag("mode_slug", mode_slug),
+									reason: removeClosingTag("reason", reason),
+								})
+								await this.ask("tool", partialMessage, block.partial).catch(() => {})
+								break
+							} else {
+								if (!mode_slug) {
+									this.consecutiveMistakeCount++
+									pushToolResult(await this.sayAndCreateMissingParamError("switch_mode", "mode_slug"))
+									break
+								}
+								this.consecutiveMistakeCount = 0
+
+								// Verify the mode exists
+								const targetMode = getModeBySlug(
+									mode_slug,
+									(await this.providerRef.deref()?.getState())?.customModes,
+								)
+								if (!targetMode) {
+									pushToolResult(formatResponse.toolError(`Invalid mode: ${mode_slug}`))
+									break
+								}
+
+								// Check if already in requested mode
+								const currentMode =
+									(await this.providerRef.deref()?.getState())?.mode ?? defaultModeSlug
+								if (currentMode === mode_slug) {
+									pushToolResult(`Already in ${targetMode.name} mode.`)
+									break
+								}
+
+								const completeMessage = JSON.stringify({
+									tool: "switchMode",
+									mode: mode_slug,
+									reason,
+								})
+
+								const didApprove = await askApproval("tool", completeMessage)
+								if (!didApprove) {
+									break
+								}
+
+								// Switch the mode using shared handler
+								const provider = this.providerRef.deref()
+								if (provider) {
+									await provider.handleModeSwitch(mode_slug)
+								}
+								pushToolResult(
+									`Successfully switched from ${getModeBySlug(currentMode)?.name ?? currentMode} mode to ${
+										targetMode.name
+									} mode${reason ? ` because: ${reason}` : ""}.`,
+								)
+								break
+							}
+						} catch (error) {
+							await handleError("switching mode", error)
+							break
+						}
+					}
+
 					case "attempt_completion": {
 						/*
 						this.consecutiveMistakeCount = 0
@@ -2142,7 +2216,7 @@ export class Cline {
 		}
 
 		/*
-		Seeing out of bounds is fine, it means that the next too call is being built up and ready to add to assistantMessageContent to present. 
+		Seeing out of bounds is fine, it means that the next too call is being built up and ready to add to assistantMessageContent to present.
 		When you see the UI inactive during this, it means that a tool is breaking without presenting any UI. For example the write_to_file tool was breaking when relpath was undefined, and for invalid relpath it never presented UI.
 		*/
 		this.presentAssistantMessageLocked = false // this needs to be placed here, if not then calling this.presentAssistantMessage below would fail (sometimes) since it's locked
@@ -2314,9 +2388,14 @@ export class Cline {
 
 			const stream = this.attemptApiRequest(previousApiReqIndex) // yields only if the first chunk is successful, otherwise will allow the user to retry the request (most likely due to rate limit error, which gets thrown on the first chunk)
 			let assistantMessage = ""
+			let reasoningMessage = ""
 			try {
 				for await (const chunk of stream) {
 					switch (chunk.type) {
+						case "reasoning":
+							reasoningMessage += chunk.text
+							await this.say("reasoning", reasoningMessage, undefined, true)
+							break
 						case "usage":
 							inputTokens += chunk.inputTokens
 							outputTokens += chunk.outputTokens

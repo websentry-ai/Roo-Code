@@ -162,7 +162,7 @@ describe("SYSTEM_PROMPT", () => {
 			undefined, // diffStrategy
 			undefined, // browserViewportSize
 			defaultModeSlug, // mode
-			undefined, // customPrompts
+			undefined, // customModePrompts
 			undefined, // customModes
 		)
 
@@ -178,7 +178,7 @@ describe("SYSTEM_PROMPT", () => {
 			undefined, // diffStrategy
 			"1280x800", // browserViewportSize
 			defaultModeSlug, // mode
-			undefined, // customPrompts
+			undefined, // customModePrompts
 			undefined, // customModes
 		)
 
@@ -196,7 +196,7 @@ describe("SYSTEM_PROMPT", () => {
 			undefined, // diffStrategy
 			undefined, // browserViewportSize
 			defaultModeSlug, // mode
-			undefined, // customPrompts
+			undefined, // customModePrompts
 			undefined, // customModes
 		)
 
@@ -212,7 +212,7 @@ describe("SYSTEM_PROMPT", () => {
 			undefined, // diffStrategy
 			undefined, // browserViewportSize
 			defaultModeSlug, // mode
-			undefined, // customPrompts
+			undefined, // customModePrompts
 			undefined, // customModes
 		)
 
@@ -228,7 +228,7 @@ describe("SYSTEM_PROMPT", () => {
 			undefined, // diffStrategy
 			"900x600", // different viewport size
 			defaultModeSlug, // mode
-			undefined, // customPrompts
+			undefined, // customModePrompts
 			undefined, // customModes
 		)
 
@@ -244,7 +244,7 @@ describe("SYSTEM_PROMPT", () => {
 			new SearchReplaceDiffStrategy(), // Use actual diff strategy from the codebase
 			undefined, // browserViewportSize
 			defaultModeSlug, // mode
-			undefined, // customPrompts
+			undefined, // customModePrompts
 			undefined, // customModes
 			undefined, // globalCustomInstructions
 			undefined, // preferredLanguage
@@ -264,7 +264,7 @@ describe("SYSTEM_PROMPT", () => {
 			new SearchReplaceDiffStrategy(), // Use actual diff strategy from the codebase
 			undefined, // browserViewportSize
 			defaultModeSlug, // mode
-			undefined, // customPrompts
+			undefined, // customModePrompts
 			undefined, // customModes
 			undefined, // globalCustomInstructions
 			undefined, // preferredLanguage
@@ -284,7 +284,7 @@ describe("SYSTEM_PROMPT", () => {
 			new SearchReplaceDiffStrategy(), // Use actual diff strategy from the codebase
 			undefined, // browserViewportSize
 			defaultModeSlug, // mode
-			undefined, // customPrompts
+			undefined, // customModePrompts
 			undefined, // customModes
 			undefined, // globalCustomInstructions
 			undefined, // preferredLanguage
@@ -304,7 +304,7 @@ describe("SYSTEM_PROMPT", () => {
 			undefined, // diffStrategy
 			undefined, // browserViewportSize
 			defaultModeSlug, // mode
-			undefined, // customPrompts
+			undefined, // customModePrompts
 			undefined, // customModes
 			undefined, // globalCustomInstructions
 			"Spanish", // preferredLanguage
@@ -334,7 +334,7 @@ describe("SYSTEM_PROMPT", () => {
 			undefined, // diffStrategy
 			undefined, // browserViewportSize
 			"custom-mode", // mode
-			undefined, // customPrompts
+			undefined, // customModePrompts
 			customModes, // customModes
 			"Global instructions", // globalCustomInstructions
 		)
@@ -348,6 +348,56 @@ describe("SYSTEM_PROMPT", () => {
 		expect(customInstructionsIndex).toBeGreaterThan(-1)
 		expect(userInstructionsHeader).toBeGreaterThan(-1)
 		expect(customInstructionsIndex).toBeGreaterThan(userInstructionsHeader)
+	})
+
+	it("should use promptComponent roleDefinition when available", async () => {
+		const customModePrompts = {
+			[defaultModeSlug]: {
+				roleDefinition: "Custom prompt role definition",
+				customInstructions: "Custom prompt instructions",
+			},
+		}
+
+		const prompt = await SYSTEM_PROMPT(
+			mockContext,
+			"/test/path",
+			false,
+			undefined,
+			undefined,
+			undefined,
+			defaultModeSlug,
+			customModePrompts,
+			undefined,
+		)
+
+		// Role definition from promptComponent should be at the top
+		expect(prompt.indexOf("Custom prompt role definition")).toBeLessThan(prompt.indexOf("TOOL USE"))
+		// Should not contain the default mode's role definition
+		expect(prompt).not.toContain(modes[0].roleDefinition)
+	})
+
+	it("should fallback to modeConfig roleDefinition when promptComponent has no roleDefinition", async () => {
+		const customModePrompts = {
+			[defaultModeSlug]: {
+				customInstructions: "Custom prompt instructions",
+				// No roleDefinition provided
+			},
+		}
+
+		const prompt = await SYSTEM_PROMPT(
+			mockContext,
+			"/test/path",
+			false,
+			undefined,
+			undefined,
+			undefined,
+			defaultModeSlug,
+			customModePrompts,
+			undefined,
+		)
+
+		// Should use the default mode's role definition
+		expect(prompt.indexOf(modes[0].roleDefinition)).toBeLessThan(prompt.indexOf("TOOL USE"))
 	})
 
 	afterAll(() => {
@@ -382,7 +432,7 @@ describe("addCustomInstructions", () => {
 			undefined, // diffStrategy
 			undefined, // browserViewportSize
 			"architect", // mode
-			undefined, // customPrompts
+			undefined, // customModePrompts
 			undefined, // customModes
 		)
 
@@ -398,7 +448,7 @@ describe("addCustomInstructions", () => {
 			undefined, // diffStrategy
 			undefined, // browserViewportSize
 			"ask", // mode
-			undefined, // customPrompts
+			undefined, // customModePrompts
 			undefined, // customModes
 		)
 

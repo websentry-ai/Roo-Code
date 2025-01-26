@@ -68,7 +68,8 @@ export interface WebviewMessage {
 		| "requestVsCodeLmModels"
 		| "mode"
 		| "updatePrompt"
-		| "updateEnhancedPrompt"
+		| "updateSupportPrompt"
+		| "resetSupportPrompt"
 		| "getSystemPrompt"
 		| "systemPrompt"
 		| "enhancementApiConfigId"
@@ -77,6 +78,7 @@ export interface WebviewMessage {
 		| "updateCustomMode"
 		| "deleteCustomMode"
 		| "setopenAiCustomModelInfo"
+		| "openCustomModesSettings"
 	text?: string
 	disabled?: boolean
 	askResponse?: ClineAskResponse

@@ -449,7 +449,7 @@ describe("ClineProvider", () => {
 		})
 
 		const state = await provider.getState()
-		expect(state.requestDelaySeconds).toBe(5)
+		expect(state.requestDelaySeconds).toBe(10)
 	})
 
 	test("alwaysApproveResubmit defaults to false", async () => {
@@ -555,7 +555,7 @@ describe("ClineProvider", () => {
 			architect: "existing architect prompt",
 		}
 		;(mockContext.globalState.get as jest.Mock).mockImplementation((key: string) => {
-			if (key === "customPrompts") {
+			if (key === "customModePrompts") {
 				return existingPrompts
 			}
 			return undefined
@@ -569,7 +569,7 @@ describe("ClineProvider", () => {
 		})
 
 		// Verify state was updated correctly
-		expect(mockContext.globalState.update).toHaveBeenCalledWith("customPrompts", {
+		expect(mockContext.globalState.update).toHaveBeenCalledWith("customModePrompts", {
 			...existingPrompts,
 			code: "new code prompt",
 		})
@@ -579,7 +579,7 @@ describe("ClineProvider", () => {
 			expect.objectContaining({
 				type: "state",
 				state: expect.objectContaining({
-					customPrompts: {
+					customModePrompts: {
 						...existingPrompts,
 						code: "new code prompt",
 					},
@@ -588,17 +588,17 @@ describe("ClineProvider", () => {
 		)
 	})
 
-	test("customPrompts defaults to empty object", async () => {
-		// Mock globalState.get to return undefined for customPrompts
+	test("customModePrompts defaults to empty object", async () => {
+		// Mock globalState.get to return undefined for customModePrompts
 		;(mockContext.globalState.get as jest.Mock).mockImplementation((key: string) => {
-			if (key === "customPrompts") {
+			if (key === "customModePrompts") {
 				return undefined
 			}
 			return null
 		})
 
 		const state = await provider.getState()
-		expect(state.customPrompts).toEqual({})
+		expect(state.customModePrompts).toEqual({})
 	})
 
 	test("uses mode-specific custom instructions in Cline initialization", async () => {
@@ -611,7 +611,7 @@ describe("ClineProvider", () => {
 
 		jest.spyOn(provider, "getState").mockResolvedValue({
 			apiConfiguration: mockApiConfig,
-			customPrompts: {
+			customModePrompts: {
 				code: { customInstructions: modeCustomInstructions },
 			},
 			mode: "code",
@@ -651,7 +651,7 @@ describe("ClineProvider", () => {
 			},
 		}
 		mockContext.globalState.get = jest.fn((key: string) => {
-			if (key === "customPrompts") {
+			if (key === "customModePrompts") {
 				return existingPrompts
 			}
 			return undefined
@@ -668,7 +668,7 @@ describe("ClineProvider", () => {
 		})
 
 		// Verify state was updated correctly
-		expect(mockContext.globalState.update).toHaveBeenCalledWith("customPrompts", {
+		expect(mockContext.globalState.update).toHaveBeenCalledWith("customModePrompts", {
 			code: {
 				roleDefinition: "Code role",
 				customInstructions: "New instructions",
@@ -978,7 +978,7 @@ describe("ClineProvider", () => {
 					apiModelId: "test-model",
 					openRouterModelInfo: { supportsComputerUse: true },
 				},
-				customPrompts: {},
+				customModePrompts: {},
 				mode: "code",
 				mcpEnabled: false,
 				browserViewportSize: "900x600",
@@ -1007,7 +1007,7 @@ describe("ClineProvider", () => {
 				}),
 				"900x600", // browserViewportSize
 				"code", // mode
-				{}, // customPrompts
+				{}, // customModePrompts
 				{}, // customModes
 				undefined, // effectiveInstructions
 				undefined, // preferredLanguage
@@ -1027,7 +1027,7 @@ describe("ClineProvider", () => {
 					apiModelId: "test-model",
 					openRouterModelInfo: { supportsComputerUse: true },
 				},
-				customPrompts: {},
+				customModePrompts: {},
 				mode: "code",
 				mcpEnabled: false,
 				browserViewportSize: "900x600",
@@ -1056,7 +1056,7 @@ describe("ClineProvider", () => {
 				}),
 				"900x600", // browserViewportSize
 				"code", // mode
-				{}, // customPrompts
+				{}, // customModePrompts
 				{}, // customModes
 				undefined, // effectiveInstructions
 				undefined, // preferredLanguage
@@ -1071,7 +1071,7 @@ describe("ClineProvider", () => {
 					apiProvider: "openrouter",
 					openRouterModelInfo: { supportsComputerUse: true },
 				},
-				customPrompts: {
+				customModePrompts: {
 					architect: { customInstructions: "Architect mode instructions" },
 				},
 				mode: "architect",
@@ -1097,6 +1097,68 @@ describe("ClineProvider", () => {
 				"",
 				expect.any(String),
 			)
+		})
+	})
+
+	describe("handleModeSwitch", () => {
+		beforeEach(() => {
+			// Set up webview for each test
+			provider.resolveWebviewView(mockWebviewView)
+		})
+
+		test("loads saved API config when switching modes", async () => {
+			// Mock ConfigManager methods
+			provider.configManager = {
+				getModeConfigId: jest.fn().mockResolvedValue("saved-config-id"),
+				listConfig: jest
+					.fn()
+					.mockResolvedValue([{ name: "saved-config", id: "saved-config-id", apiProvider: "anthropic" }]),
+				loadConfig: jest.fn().mockResolvedValue({ apiProvider: "anthropic" }),
+				setModeConfig: jest.fn(),
+			} as any
+
+			// Switch to architect mode
+			await provider.handleModeSwitch("architect")
+
+			// Verify mode was updated
+			expect(mockContext.globalState.update).toHaveBeenCalledWith("mode", "architect")
+
+			// Verify saved config was loaded
+			expect(provider.configManager.getModeConfigId).toHaveBeenCalledWith("architect")
+			expect(provider.configManager.loadConfig).toHaveBeenCalledWith("saved-config")
+			expect(mockContext.globalState.update).toHaveBeenCalledWith("currentApiConfigName", "saved-config")
+
+			// Verify state was posted to webview
+			expect(mockPostMessage).toHaveBeenCalledWith(expect.objectContaining({ type: "state" }))
+		})
+
+		test("saves current config when switching to mode without config", async () => {
+			// Mock ConfigManager methods
+			provider.configManager = {
+				getModeConfigId: jest.fn().mockResolvedValue(undefined),
+				listConfig: jest
+					.fn()
+					.mockResolvedValue([{ name: "current-config", id: "current-id", apiProvider: "anthropic" }]),
+				setModeConfig: jest.fn(),
+			} as any
+
+			// Mock current config name
+			mockContext.globalState.get = jest.fn((key: string) => {
+				if (key === "currentApiConfigName") return "current-config"
+				return undefined
+			})
+
+			// Switch to architect mode
+			await provider.handleModeSwitch("architect")
+
+			// Verify mode was updated
+			expect(mockContext.globalState.update).toHaveBeenCalledWith("mode", "architect")
+
+			// Verify current config was saved as default for new mode
+			expect(provider.configManager.setModeConfig).toHaveBeenCalledWith("architect", "current-id")
+
+			// Verify state was posted to webview
+			expect(mockPostMessage).toHaveBeenCalledWith(expect.objectContaining({ type: "state" }))
 		})
 	})
 

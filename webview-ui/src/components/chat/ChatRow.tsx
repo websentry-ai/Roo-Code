@@ -15,6 +15,7 @@ import { vscode } from "../../utils/vscode"
 import CodeAccordian, { removeLeadingNonAlphanumeric } from "../common/CodeAccordian"
 import CodeBlock, { CODE_BLOCK_BG_COLOR } from "../common/CodeBlock"
 import MarkdownBlock from "../common/MarkdownBlock"
+import ReasoningBlock from "./ReasoningBlock"
 import Thumbnails from "../common/Thumbnails"
 import McpResourceRow from "../mcp/McpResourceRow"
 import McpToolRow from "../mcp/McpToolRow"
@@ -78,7 +79,15 @@ export const ChatRowContent = ({
 	isLast,
 	isStreaming,
 }: ChatRowContentProps) => {
-	const { mcpServers } = useExtensionState()
+	const { mcpServers, alwaysAllowMcp } = useExtensionState()
+	const [reasoningCollapsed, setReasoningCollapsed] = useState(false)
+
+	// Auto-collapse reasoning when new messages arrive
+	useEffect(() => {
+		if (!isLast && message.say === "reasoning") {
+			setReasoningCollapsed(true)
+		}
+	}, [isLast, message.say])
 	const [cost, apiReqCancelReason, apiReqStreamingFailedMessage] = useMemo(() => {
 		if (message.text != null && message.say === "api_req_started") {
 			const info: ClineApiReqInfo = JSON.parse(message.text)
@@ -443,6 +452,27 @@ export const ChatRowContent = ({
 			// 			</div>
 			// 		</>
 			// 	)
+			case "switchMode":
+				return (
+					<>
+						<div style={headerStyle}>
+							{toolIcon("symbol-enum")}
+							<span style={{ fontWeight: "bold" }}>
+								{message.type === "ask" ? (
+									<>
+										Roo wants to switch to <code>{tool.mode}</code> mode
+										{tool.reason ? ` because: ${tool.reason}` : ""}
+									</>
+								) : (
+									<>
+										Roo switched to <code>{tool.mode}</code> mode
+										{tool.reason ? ` because: ${tool.reason}` : ""}
+									</>
+								)}
+							</span>
+						</div>
+					</>
+				)
 			default:
 				return null
 		}
@@ -451,6 +481,14 @@ export const ChatRowContent = ({
 	switch (message.type) {
 		case "say":
 			switch (message.say) {
+				case "reasoning":
+					return (
+						<ReasoningBlock
+							content={message.text || ""}
+							isCollapsed={reasoningCollapsed}
+							onToggleCollapse={() => setReasoningCollapsed(!reasoningCollapsed)}
+						/>
+					)
 				case "api_req_started":
 					return (
 						<>
@@ -570,14 +608,17 @@ export const ChatRowContent = ({
 									alignItems: "flex-start",
 									gap: "10px",
 								}}>
-								<span style={{ display: "block", flexGrow: 1 }}>{highlightMentions(message.text)}</span>
+								<span style={{ display: "block", flexGrow: 1, padding: "4px" }}>
+									{highlightMentions(message.text)}
+								</span>
 								<VSCodeButton
 									appearance="icon"
 									style={{
 										padding: "3px",
 										flexShrink: 0,
 										height: "24px",
-										marginTop: "-6px",
+										marginTop: "-3px",
+										marginBottom: "-3px",
 										marginRight: "-6px",
 									}}
 									disabled={isStreaming}
@@ -847,6 +888,7 @@ export const ChatRowContent = ({
 														)?.alwaysAllow || false,
 												}}
 												serverName={useMcpServer.serverName}
+												alwaysAllowMcp={alwaysAllowMcp}
 											/>
 										</div>
 										{useMcpServer.arguments && useMcpServer.arguments !== "{}" && (

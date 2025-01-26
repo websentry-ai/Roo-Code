@@ -9,9 +9,10 @@ import { getAskFollowupQuestionDescription } from "./ask-followup-question"
 import { getAttemptCompletionDescription } from "./attempt-completion"
 import { getUseMcpToolDescription } from "./use-mcp-tool"
 import { getAccessMcpResourceDescription } from "./access-mcp-resource"
+import { getSwitchModeDescription } from "./switch-mode"
 import { DiffStrategy } from "../../diff/DiffStrategy"
 import { McpHub } from "../../../services/mcp/McpHub"
-import { Mode, ModeConfig, getModeConfig, isToolAllowedForMode } from "../../../shared/modes"
+import { Mode, ModeConfig, getModeConfig, isToolAllowedForMode, getGroupName } from "../../../shared/modes"
 import { ToolName, getToolName, getToolOptions, TOOL_GROUPS, ALWAYS_AVAILABLE_TOOLS } from "../../../shared/tool-groups"
 import { ToolArgs } from "./types"
 
@@ -28,6 +29,7 @@ const toolDescriptionMap: Record<string, (args: ToolArgs) => string | undefined>
 	attempt_completion: () => getAttemptCompletionDescription(),
 	use_mcp_tool: (args) => getUseMcpToolDescription(args),
 	access_mcp_resource: (args) => getAccessMcpResourceDescription(args),
+	switch_mode: () => getSwitchModeDescription(),
 	apply_diff: (args) =>
 		args.diffStrategy ? args.diffStrategy.getToolDescription({ cwd: args.cwd, toolOptions: args.toolOptions }) : "",
 }
@@ -53,12 +55,16 @@ export function getToolDescriptionsForMode(
 	const tools = new Set<string>()
 
 	// Add tools from mode's groups
-	config.groups.forEach((group) => {
-		TOOL_GROUPS[group].forEach((tool) => {
-			if (isToolAllowedForMode(tool as ToolName, mode, customModes ?? [])) {
-				tools.add(tool)
-			}
-		})
+	config.groups.forEach((groupEntry) => {
+		const groupName = getGroupName(groupEntry)
+		const toolGroup = TOOL_GROUPS[groupName]
+		if (toolGroup) {
+			toolGroup.forEach((tool) => {
+				if (isToolAllowedForMode(tool as ToolName, mode, customModes ?? [])) {
+					tools.add(tool)
+				}
+			})
+		}
 	})
 
 	// Add always available tools
@@ -93,4 +99,5 @@ export {
 	getAttemptCompletionDescription,
 	getUseMcpToolDescription,
 	getAccessMcpResourceDescription,
+	getSwitchModeDescription,
 }

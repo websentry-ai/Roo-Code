@@ -3,7 +3,7 @@
 	"displayName": "Roo Code (prev. Roo Cline)",
 	"description": "A VS Code plugin that enhances coding with AI-powered automation, multi-model support, and experimental features.",
 	"publisher": "RooVeterinaryInc",
-	"version": "3.2.4",
+	"version": "3.3.2",
 	"icon": "assets/icons/rocket.png",
 	"galleryBanner": {
 		"color": "#617A91",
@@ -101,9 +101,41 @@
 				"command": "roo-cline.openInNewTab",
 				"title": "Open In New Tab",
 				"category": "Roo Code"
+			},
+			{
+				"command": "roo-cline.explainCode",
+				"title": "Roo Code: Explain Code",
+				"category": "Roo Code"
+			},
+			{
+				"command": "roo-cline.fixCode",
+				"title": "Roo Code: Fix Code",
+				"category": "Roo Code"
+			},
+			{
+				"command": "roo-cline.improveCode",
+				"title": "Roo Code: Improve Code",
+				"category": "Roo Code"
 			}
 		],
 		"menus": {
+			"editor/context": [
+				{
+					"command": "roo-cline.explainCode",
+					"when": "editorHasSelection",
+					"group": "Roo Code@1"
+				},
+				{
+					"command": "roo-cline.fixCode",
+					"when": "editorHasSelection",
+					"group": "Roo Code@2"
+				},
+				{
+					"command": "roo-cline.improveCode",
+					"when": "editorHasSelection",
+					"group": "Roo Code@3"
+				}
+			],
 			"view/title": [
 				{
 					"command": "roo-cline.plusButtonClicked",

@@ -4,7 +4,8 @@ import { ApiConfiguration, ApiProvider, ModelInfo } from "./api"
 import { HistoryItem } from "./HistoryItem"
 import { McpServer } from "./mcp"
 import { GitCommit } from "../utils/git"
-import { Mode, CustomPrompts, ModeConfig } from "./modes"
+import { Mode, CustomModePrompts, ModeConfig } from "./modes"
+import { CustomSupportPrompts } from "./support-prompt"
 
 export interface LanguageModelChatSelector {
 	vendor?: string
@@ -82,7 +83,8 @@ export interface ExtensionState {
 	currentApiConfigName?: string
 	listApiConfigMeta?: ApiConfigMeta[]
 	customInstructions?: string
-	customPrompts?: CustomPrompts
+	customModePrompts?: CustomModePrompts
+	customSupportPrompts?: CustomSupportPrompts
 	alwaysAllowReadOnly?: boolean
 	alwaysAllowWrite?: boolean
 	alwaysAllowExecute?: boolean
@@ -119,6 +121,7 @@ export interface ClineMessage {
 	text?: string
 	images?: string[]
 	partial?: boolean
+	reasoning?: string
 }
 
 export type ClineAsk =
@@ -140,6 +143,7 @@ export type ClineSay =
 	| "api_req_started"
 	| "api_req_finished"
 	| "text"
+	| "reasoning"
 	| "completion_result"
 	| "user_feedback"
 	| "user_feedback_diff"
@@ -164,11 +168,14 @@ export interface ClineSayTool {
 		| "listFilesRecursive"
 		| "listCodeDefinitionNames"
 		| "searchFiles"
+		| "switchMode"
 	path?: string
 	diff?: string
 	content?: string
 	regex?: string
 	filePattern?: string
+	mode?: string
+	reason?: string
 }
 
 // must keep in sync with system prompt

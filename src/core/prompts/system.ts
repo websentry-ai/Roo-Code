@@ -1,7 +1,7 @@
 import {
 	Mode,
 	modes,
-	CustomPrompts,
+	CustomModePrompts,
 	PromptComponent,
 	getRoleDefinition,
 	defaultModeSlug,
@@ -54,7 +54,7 @@ async function generatePrompt(
 
 	// Get the full mode config to ensure we have the role definition
 	const modeConfig = getModeBySlug(mode, customModeConfigs) || modes.find((m) => m.slug === mode) || modes[0]
-	const roleDefinition = modeConfig.roleDefinition
+	const roleDefinition = promptComponent?.roleDefinition || modeConfig.roleDefinition
 
 	const basePrompt = `${roleDefinition}
 
@@ -78,7 +78,7 @@ ${getCapabilitiesSection(cwd, supportsComputerUse, mcpHub, effectiveDiffStrategy
 
 ${modesSection}
 
-${getRulesSection(cwd, supportsComputerUse, diffStrategy, context)}
+${getRulesSection(cwd, supportsComputerUse, effectiveDiffStrategy, context)}
 
 ${getSystemInfoSection(cwd, mode, customModeConfigs)}
 
@@ -97,7 +97,7 @@ export const SYSTEM_PROMPT = async (
 	diffStrategy?: DiffStrategy,
 	browserViewportSize?: string,
 	mode: Mode = defaultModeSlug,
-	customPrompts?: CustomPrompts,
+	customModePrompts?: CustomModePrompts,
 	customModes?: ModeConfig[],
 	globalCustomInstructions?: string,
 	preferredLanguage?: string,
@@ -115,7 +115,7 @@ export const SYSTEM_PROMPT = async (
 	}
 
 	// Check if it's a custom mode
-	const promptComponent = getPromptComponent(customPrompts?.[mode])
+	const promptComponent = getPromptComponent(customModePrompts?.[mode])
 	// Get full mode config from custom modes or fall back to built-in modes
 	const currentMode = getModeBySlug(mode, customModes) || modes.find((m) => m.slug === mode) || modes[0]
 
