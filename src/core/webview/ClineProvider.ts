@@ -80,6 +80,8 @@ type GlobalStateKey =
 	| "alwaysAllowWrite"
 	| "alwaysAllowExecute"
 	| "alwaysAllowBrowser"
+	| "alwaysAllowMcp"
+	| "alwaysAllowModeSwitch"
 	| "taskHistory"
 	| "openAiBaseUrl"
 	| "openAiModelId"
@@ -100,7 +102,6 @@ type GlobalStateKey =
 	| "soundEnabled"
 	| "soundVolume"
 	| "diffEnabled"
-	| "alwaysAllowMcp"
 	| "browserViewportSize"
 	| "screenshotQuality"
 	| "fuzzyMatchThreshold"
@@ -190,10 +191,7 @@ export class ClineProvider implements vscode.WebviewViewProvider {
 		return findLast(Array.from(this.activeInstances), (instance) => instance.view?.visible === true)
 	}
 
-	public static async handleCodeAction(
-		promptType: keyof typeof ACTION_NAMES,
-		params: Record<string, string | any[]>,
-	): Promise<void> {
+	public static async getInstance(): Promise<ClineProvider | undefined> {
 		let visibleProvider = ClineProvider.getVisibleInstance()
 
 		// If no visible provider, try to show the sidebar view
@@ -209,9 +207,45 @@ export class ClineProvider implements vscode.WebviewViewProvider {
 			return
 		}
 
+		return visibleProvider
+	}
+
+	public static async isActiveTask(): Promise<boolean> {
+		const visibleProvider = await ClineProvider.getInstance()
+		if (!visibleProvider) {
+			return false
+		}
+
+		if (visibleProvider.cline) {
+			return true
+		}
+
+		return false
+	}
+
+	public static async handleCodeAction(
+		command: string,
+		promptType: keyof typeof ACTION_NAMES,
+		params: Record<string, string | any[]>,
+	): Promise<void> {
+		const visibleProvider = await ClineProvider.getInstance()
+		if (!visibleProvider) {
+			return
+		}
+
 		const { customSupportPrompts } = await visibleProvider.getState()
 
 		const prompt = supportPrompt.create(promptType, params, customSupportPrompts)
+
+		if (visibleProvider.cline && command.endsWith("InCurrentTask")) {
+			await visibleProvider.postMessageToWebview({
+				type: "invoke",
+				invoke: "sendMessage",
+				text: prompt,
+			})
+
+			return
+		}
 
 		await visibleProvider.initClineWithTask(prompt)
 	}
@@ -587,6 +621,10 @@ export class ClineProvider implements vscode.WebviewViewProvider {
 						break
 					case "alwaysAllowMcp":
 						await this.updateGlobalState("alwaysAllowMcp", message.bool)
+						await this.postStateToWebview()
+						break
+					case "alwaysAllowModeSwitch":
+						await this.updateGlobalState("alwaysAllowModeSwitch", message.bool)
 						await this.postStateToWebview()
 						break
 					case "askResponse":
@@ -1178,6 +1216,16 @@ export class ClineProvider implements vscode.WebviewViewProvider {
 							await this.cline.updateDiffStrategy(message.bool ?? false)
 						}
 						await this.postStateToWebview()
+						break
+					case "updateMcpTimeout":
+						if (message.serverName && typeof message.timeout === "number") {
+							try {
+								await this.mcpHub?.updateServerTimeout(message.serverName, message.timeout)
+							} catch (error) {
+								console.error(`Failed to update timeout for ${message.serverName}:`, error)
+								vscode.window.showErrorMessage(`Failed to update server timeout`)
+							}
+						}
 						break
 					case "updateCustomMode":
 						if (message.modeConfig) {
@@ -1811,6 +1859,7 @@ export class ClineProvider implements vscode.WebviewViewProvider {
 			alwaysAllowExecute,
 			alwaysAllowBrowser,
 			alwaysAllowMcp,
+			alwaysAllowModeSwitch,
 			soundEnabled,
 			diffEnabled,
 			taskHistory,
@@ -1845,6 +1894,7 @@ export class ClineProvider implements vscode.WebviewViewProvider {
 			alwaysAllowExecute: alwaysAllowExecute ?? false,
 			alwaysAllowBrowser: alwaysAllowBrowser ?? false,
 			alwaysAllowMcp: alwaysAllowMcp ?? false,
+			alwaysAllowModeSwitch: alwaysAllowModeSwitch ?? false,
 			uriScheme: vscode.env.uriScheme,
 			clineMessages: this.cline?.clineMessages || [],
 			taskHistory: (taskHistory || [])
@@ -1972,6 +2022,7 @@ export class ClineProvider implements vscode.WebviewViewProvider {
 			alwaysAllowExecute,
 			alwaysAllowBrowser,
 			alwaysAllowMcp,
+			alwaysAllowModeSwitch,
 			taskHistory,
 			allowedCommands,
 			soundEnabled,
@@ -2043,6 +2094,7 @@ export class ClineProvider implements vscode.WebviewViewProvider {
 			this.getGlobalState("alwaysAllowExecute") as Promise<boolean | undefined>,
 			this.getGlobalState("alwaysAllowBrowser") as Promise<boolean | undefined>,
 			this.getGlobalState("alwaysAllowMcp") as Promise<boolean | undefined>,
+			this.getGlobalState("alwaysAllowModeSwitch") as Promise<boolean | undefined>,
 			this.getGlobalState("taskHistory") as Promise<HistoryItem[] | undefined>,
 			this.getGlobalState("allowedCommands") as Promise<string[] | undefined>,
 			this.getGlobalState("soundEnabled") as Promise<boolean | undefined>,
@@ -2135,6 +2187,7 @@ export class ClineProvider implements vscode.WebviewViewProvider {
 			alwaysAllowExecute: alwaysAllowExecute ?? false,
 			alwaysAllowBrowser: alwaysAllowBrowser ?? false,
 			alwaysAllowMcp: alwaysAllowMcp ?? false,
+			alwaysAllowModeSwitch: alwaysAllowModeSwitch ?? false,
 			taskHistory,
 			allowedCommands,
 			soundEnabled: soundEnabled ?? false,
