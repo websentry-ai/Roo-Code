@@ -1694,6 +1694,30 @@ export class ClineProvider implements vscode.WebviewViewProvider {
 		// await this.postMessageToWebview({ type: "action", action: "settingsButtonClicked" }) // bad ux if user is on welcome
 	}
 
+	// Unbound
+
+	async handleUnboundCallback(code: string) {
+		let apiKey: string
+		try {
+			const response = await axios.post("<BACKEND_URL>", { code }) // TODO: change to the actual backend url
+			if (response.data && response.data.key) {
+				apiKey = response.data.key
+			} else {
+				throw new Error("Invalid response from Unbound API")
+			}
+		} catch (error) {
+			this.outputChannel.appendLine(
+				`Error exchanging code for API key: ${JSON.stringify(error, Object.getOwnPropertyNames(error), 2)}`,
+			)
+			throw error
+		}
+
+		const unbound: ApiProvider = "unbound"
+		await this.updateGlobalState("apiProvider", unbound)
+		await this.storeSecret("unboundApiKey", apiKey)
+		await this.postStateToWebview()
+	}
+
 	async readGlamaModels(): Promise<Record<string, ModelInfo> | undefined> {
 		const glamaModelsFilePath = path.join(await this.ensureCacheDirectoryExists(), GlobalFileNames.glamaModels)
 		const fileExists = await fileExistsAtPath(glamaModelsFilePath)
