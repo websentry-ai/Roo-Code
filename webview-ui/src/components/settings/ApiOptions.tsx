@@ -1387,7 +1387,7 @@ export function getOpenRouterAuthUrl(uriScheme?: string) {
 }
 
 export function getUnboundAuthUrl(uriScheme?: string) {
-	return `https://auth.getunbound.ai?callback_url=${uriScheme || "vscode"}://rooveterinaryinc.roo-cline/unbound`
+	return `http://localhost:3000/auth?callback_url=${uriScheme || "vscode"}://rooveterinaryinc.roo-cline/unbound`
 }
 
 export const formatPrice = (price: number) => {

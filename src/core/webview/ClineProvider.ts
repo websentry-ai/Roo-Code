@@ -1699,9 +1699,17 @@ export class ClineProvider implements vscode.WebviewViewProvider {
 	async handleUnboundCallback(code: string) {
 		let apiKey: string
 		try {
-			const response = await axios.post("<BACKEND_URL>", { code }) // TODO: change to the actual backend url
-			if (response.data && response.data.key) {
-				apiKey = response.data.key
+			const response = await axios.post(
+				"http://localhost:8000/api/v1/create_application/",
+				{},
+				{
+					headers: {
+						Authorization: `Bearer ${code}`,
+					},
+				},
+			)
+			if (response.data && response.data.api_key) {
+				apiKey = response.data.api_key
 			} else {
 				throw new Error("Invalid response from Unbound API")
 			}
