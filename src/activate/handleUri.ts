@@ -26,6 +26,13 @@ export const handleUri = async (uri: vscode.Uri) => {
 			}
 			break
 		}
+		case "/unbound": {
+			const code = query.get("code")
+			if (code) {
+				await visibleProvider.handleUnboundCallback(code)
+			}
+			break
+		}
 		default:
 			break
 	}

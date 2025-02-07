@@ -1301,7 +1301,7 @@ const ApiOptions = ({ apiErrorMessage, modelIdErrorMessage }: ApiOptionsProps) =
 					</VSCodeTextField>
 					{!apiConfiguration?.unboundApiKey && (
 						<VSCodeButtonLink
-							href="https://gateway.getunbound.ai"
+							href={getUnboundAuthUrl(uriScheme)}
 							style={{ margin: "5px 0 0 0" }}
 							appearance="secondary">
 							Get Unbound API Key
@@ -1384,6 +1384,10 @@ export function getGlamaAuthUrl(uriScheme?: string) {
 
 export function getOpenRouterAuthUrl(uriScheme?: string) {
 	return `https://openrouter.ai/auth?callback_url=${uriScheme || "vscode"}://rooveterinaryinc.roo-cline/openrouter`
+}
+
+export function getUnboundAuthUrl(uriScheme?: string) {
+	return `http://localhost:3000/auth?callback_url=${uriScheme || "vscode"}://rooveterinaryinc.roo-cline/unbound`
 }
 
 export const formatPrice = (price: number) => {
