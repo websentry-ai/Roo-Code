@@ -2206,7 +2206,8 @@ export class ClineProvider implements vscode.WebviewViewProvider {
 			const response = await axios.get("http://localhost:8787/models", config)
 
 			if (response.data?.error) {
-				this.outputChannel.appendLine(`Error fetching Unbound models: ${response.data.error.message}`)
+				const errorMessage = response.data.error.message
+				this.outputChannel.appendLine(`Error fetching Unbound models: ${errorMessage}`)
 				await fs.writeFile(unboundModelsFilePath, JSON.stringify({}))
 				await this.postMessageToWebview({ type: "unboundModels", unboundModels: models })
 				await this.updateGlobalState("unboundModelId", "")
@@ -2232,7 +2233,7 @@ export class ClineProvider implements vscode.WebviewViewProvider {
 			}
 			await fs.writeFile(unboundModelsFilePath, JSON.stringify(models))
 			if (unboundModelId && !Object.keys(models).includes(unboundModelId as string)) {
-				await this.updateGlobalState("unboundModelId", "")
+				await this.updateGlobalState("unboundModelId", Object.keys(models)[0])
 			}
 		} catch (error) {
 			this.outputChannel.appendLine(
