@@ -28,7 +28,6 @@ import {
 	openRouterDefaultModelInfo,
 	vertexDefaultModelId,
 	vertexModels,
-	unboundDefaultModelId,
 	unboundDefaultModelInfo,
 	requestyDefaultModelId,
 	requestyDefaultModelInfo,
@@ -1348,6 +1347,14 @@ const ApiOptions = ({ apiErrorMessage, modelIdErrorMessage, fromWelcomeView }: A
 						}}>
 						This key is stored locally and only used to make API requests from this extension.
 					</p>
+					<p
+						style={{
+							fontSize: "12px",
+							marginTop: 3,
+							color: "var(--vscode-descriptionForeground)",
+						}}>
+						Check API key to get models
+					</p>
 					<UnboundModelPicker />
 				</div>
 			)}
@@ -1511,7 +1518,7 @@ export function normalizeApiConfiguration(apiConfiguration?: ApiConfiguration) {
 		case "unbound":
 			return {
 				selectedProvider: provider,
-				selectedModelId: apiConfiguration?.unboundModelId || unboundDefaultModelId,
+				selectedModelId: apiConfiguration?.unboundModelId || "",
 				selectedModelInfo: apiConfiguration?.unboundModelInfo || unboundDefaultModelInfo,
 			}
 		case "requesty":
