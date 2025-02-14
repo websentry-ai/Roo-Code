@@ -1686,6 +1686,10 @@ export class ClineProvider implements vscode.WebviewViewProvider {
 		if (this.cline) {
 			this.cline.api = buildApiHandler(apiConfiguration)
 		}
+		if (unboundApiKey) {
+			// Get models for the given application
+			await this.refreshUnboundModels()
+		}
 	}
 
 	async cancelTask() {
@@ -2191,7 +2195,23 @@ export class ClineProvider implements vscode.WebviewViewProvider {
 
 		const models: Record<string, ModelInfo> = {}
 		try {
-			const response = await axios.get("https://api.getunbound.ai/models")
+			const unboundApiKey = await this.getSecret("unboundApiKey")
+			const unboundModelId = await this.getGlobalState("unboundModelId")
+			const config: Record<string, any> = {}
+
+			if (unboundApiKey) {
+				config.headers = { Authorization: `Bearer ${unboundApiKey}` }
+			}
+
+			const response = await axios.get("http://localhost:8787/models", config)
+
+			if (response.data?.error) {
+				this.outputChannel.appendLine(`Error fetching Unbound models: ${response.data.error.message}`)
+				await fs.writeFile(unboundModelsFilePath, JSON.stringify({}))
+				await this.postMessageToWebview({ type: "unboundModels", unboundModels: models })
+				await this.updateGlobalState("unboundModelId", "")
+				return models
+			}
 
 			if (response.data) {
 				const rawModels: Record<string, any> = response.data
@@ -2211,6 +2231,9 @@ export class ClineProvider implements vscode.WebviewViewProvider {
 				}
 			}
 			await fs.writeFile(unboundModelsFilePath, JSON.stringify(models))
+			if (unboundModelId && !Object.keys(models).includes(unboundModelId as string)) {
+				await this.updateGlobalState("unboundModelId", "")
+			}
 		} catch (error) {
 			this.outputChannel.appendLine(
 				`Error fetching Unbound models: ${JSON.stringify(error, Object.getOwnPropertyNames(error), 2)}`,
