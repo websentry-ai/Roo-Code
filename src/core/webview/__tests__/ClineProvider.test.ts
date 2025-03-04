@@ -369,7 +369,7 @@ describe("ClineProvider", () => {
 			uriScheme: "vscode",
 			soundEnabled: false,
 			diffEnabled: false,
-			checkpointsEnabled: false,
+			enableCheckpoints: false,
 			writeDelayMs: 1000,
 			browserViewportSize: "900x600",
 			fuzzyMatchThreshold: 1.0,
@@ -381,6 +381,7 @@ describe("ClineProvider", () => {
 			customModes: [],
 			experiments: experimentDefault,
 			maxOpenTabsContext: 20,
+			browserToolEnabled: true,
 		}
 
 		const message: ExtensionMessage = {
@@ -591,6 +592,21 @@ describe("ClineProvider", () => {
 		expect(provider.configManager.setModeConfig).toHaveBeenCalledWith("architect", "new-id")
 	})
 
+	test("handles browserToolEnabled setting", async () => {
+		await provider.resolveWebviewView(mockWebviewView)
+		const messageHandler = (mockWebviewView.webview.onDidReceiveMessage as jest.Mock).mock.calls[0][0]
+
+		// Test browserToolEnabled
+		await messageHandler({ type: "browserToolEnabled", bool: true })
+		expect(mockContext.globalState.update).toHaveBeenCalledWith("browserToolEnabled", true)
+		expect(mockPostMessage).toHaveBeenCalled()
+
+		// Verify state includes browserToolEnabled
+		const state = await provider.getState()
+		expect(state).toHaveProperty("browserToolEnabled")
+		expect(state.browserToolEnabled).toBe(true) // Default value should be true
+	})
+
 	test("handles request delay settings messages", async () => {
 		await provider.resolveWebviewView(mockWebviewView)
 		const messageHandler = (mockWebviewView.webview.onDidReceiveMessage as jest.Mock).mock.calls[0][0]
@@ -677,7 +693,7 @@ describe("ClineProvider", () => {
 			},
 			mode: "code",
 			diffEnabled: true,
-			checkpointsEnabled: false,
+			enableCheckpoints: false,
 			fuzzyMatchThreshold: 1.0,
 			experiments: experimentDefault,
 		} as any)

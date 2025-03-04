@@ -1,5 +1,71 @@
 # Roo Code Changelog
 
+## [3.7.12]
+
+- Expand max tokens of thinking models to 128k, and max thinking budget to over 100k (thanks @monotykamary!)
+- Fix issue where keyboard mode switcher wasn't updating API profile (thanks @aheizi!)
+- Use the count_tokens API in the Anthropic provider for more accurate context window management
+- Default middle-out compression to on for OpenRouter
+- Exclude MCP instructions from the prompt if the mode doesn't support MCP
+- Add a checkbox to disable the browser tool
+- Show a warning if checkpoints are taking too long to load
+- Update the warning text for the VS LM API
+- Correctly populate the default OpenRouter model on the welcome screen
+
+## [3.7.11]
+
+- Don't honor custom max tokens for non thinking models
+- Include custom modes in mode switching keyboard shortcut
+- Support read-only modes that can run commands
+
+## [3.7.10]
+
+- Add Gemini models on Vertex AI (thanks @ashktn!)
+- Keyboard shortcuts to switch modes (thanks @aheizi!)
+- Add support for Mermaid diagrams (thanks Cline!)
+
+## [3.7.9]
+
+- Delete task confirmation enhancements
+- Smarter context window management
+- Prettier thinking blocks
+- Fix maxTokens defaults for Claude 3.7 Sonnet models
+- Terminal output parsing improvements (thanks @KJ7LNW!)
+- UI fix to dropdown hover colors (thanks @SamirSaji!)
+- Add support for Claude Sonnet 3.7 thinking via Vertex AI (thanks @lupuletic!)
+
+## [3.7.8]
+
+- Add Vertex AI prompt caching support for Claude models (thanks @aitoroses and @lupuletic!)
+- Add gpt-4.5-preview
+- Add an advanced feature to customize the system prompt
+
+## [3.7.7]
+
+- Graduate checkpoints out of beta
+- Fix enhance prompt button when using Thinking Sonnet
+- Add tooltips to make what buttons do more obvious
+
+## [3.7.6]
+
+- Handle really long text better in the in the ChatRow similar to TaskHeader (thanks @joemanley201!)
+- Support multiple files in drag-and-drop
+- Truncate search_file output to avoid crashing the extension
+- Better OpenRouter error handling (no more "Provider Error")
+- Add slider to control max output tokens for thinking models
+
+## [3.7.5]
+
+- Fix context window truncation math (see [#1173](https://github.com/RooVetGit/Roo-Code/issues/1173))
+- Fix various issues with the model picker (thanks @System233!)
+- Fix model input / output cost parsing (thanks @System233!)
+- Add drag-and-drop for files
+- Enable the "Thinking Budget" slider for Claude 3.7 Sonnet on OpenRouter
+
+## [3.7.4]
+
+- Fix a bug that prevented the "Thinking" setting from properly updating when switching profiles.
+
 ## [3.7.3]
 
 - Support for ["Thinking"](https://docs.anthropic.com/en/docs/build-with-claude/extended-thinking) Sonnet 3.7 when using the Anthropic provider.

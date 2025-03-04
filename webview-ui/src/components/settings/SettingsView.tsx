@@ -1,6 +1,6 @@
-import { forwardRef, memo, useCallback, useEffect, useImperativeHandle, useRef, useState } from "react"
+import { forwardRef, memo, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react"
 import { VSCodeButton, VSCodeCheckbox, VSCodeLink, VSCodeTextField } from "@vscode/webview-ui-toolkit/react"
-import { Dropdown, type DropdownOption } from "vscrui"
+import { Button, Dropdown, type DropdownOption } from "vscrui"
 
 import {
 	AlertDialog,
@@ -14,7 +14,6 @@ import {
 } from "@/components/ui"
 
 import { vscode } from "../../utils/vscode"
-import { validateApiConfiguration, validateModelId } from "../../utils/validate"
 import { ExtensionStateContextType, useExtensionState } from "../../context/ExtensionStateContext"
 import { EXPERIMENT_IDS, experimentConfigsMap, ExperimentId } from "../../../../src/shared/experiments"
 import { ApiConfiguration } from "../../../../src/shared/api"
@@ -33,19 +32,17 @@ export interface SettingsViewRef {
 
 const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone }, ref) => {
 	const extensionState = useExtensionState()
-	const [apiErrorMessage, setApiErrorMessage] = useState<string | undefined>(undefined)
-	const [modelIdErrorMessage, setModelIdErrorMessage] = useState<string | undefined>(undefined)
 	const [commandInput, setCommandInput] = useState("")
 	const [isDiscardDialogShow, setDiscardDialogShow] = useState(false)
 	const [cachedState, setCachedState] = useState(extensionState)
 	const [isChangeDetected, setChangeDetected] = useState(false)
 	const prevApiConfigName = useRef(extensionState.currentApiConfigName)
 	const confirmDialogHandler = useRef<() => void>()
+	const [errorMessage, setErrorMessage] = useState<string | undefined>(undefined)
 
 	// TODO: Reduce WebviewMessage/ExtensionState complexity
 	const { currentApiConfigName } = extensionState
 	const {
-		apiConfiguration,
 		alwaysAllowReadOnly,
 		allowedCommands,
 		alwaysAllowBrowser,
@@ -54,8 +51,9 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone },
 		alwaysAllowModeSwitch,
 		alwaysAllowWrite,
 		alwaysApproveResubmit,
+		browserToolEnabled,
 		browserViewportSize,
-		checkpointsEnabled,
+		enableCheckpoints,
 		diffEnabled,
 		experiments,
 		fuzzyMatchThreshold,
@@ -70,17 +68,19 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone },
 		writeDelayMs,
 	} = cachedState
 
+	//Make sure apiConfiguration is initialized and managed by SettingsView
+	const apiConfiguration = useMemo(() => cachedState.apiConfiguration ?? {}, [cachedState.apiConfiguration])
+
 	useEffect(() => {
-		// Update only when currentApiConfigName is changed
-		// Expected to be triggered by loadApiConfiguration/upsertApiConfiguration
+		// Update only when currentApiConfigName is changed.
+		// Expected to be triggered by loadApiConfiguration/upsertApiConfiguration.
 		if (prevApiConfigName.current === currentApiConfigName) {
 			return
 		}
-		setCachedState((prevCachedState) => ({
-			...prevCachedState,
-			...extensionState,
-		}))
+
+		setCachedState((prevCachedState) => ({ ...prevCachedState, ...extensionState }))
 		prevApiConfigName.current = currentApiConfigName
+		// console.log("useEffect: currentApiConfigName changed, setChangeDetected -> false")
 		setChangeDetected(false)
 	}, [currentApiConfigName, extensionState, isChangeDetected])
 
@@ -90,11 +90,10 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone },
 				if (prevState[field] === value) {
 					return prevState
 				}
+
+				// console.log(`setCachedStateField(${field} -> ${value}): setChangeDetected -> true`)
 				setChangeDetected(true)
-				return {
-					...prevState,
-					[field]: value,
-				}
+				return { ...prevState, [field]: value }
 			})
 		},
 		[],
@@ -107,15 +106,10 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone },
 					return prevState
 				}
 
+				// console.log(`setApiConfigurationField(${field} -> ${value}): setChangeDetected -> true`)
 				setChangeDetected(true)
 
-				return {
-					...prevState,
-					apiConfiguration: {
-						...prevState.apiConfiguration,
-						[field]: value,
-					},
-				}
+				return { ...prevState, apiConfiguration: { ...prevState.apiConfiguration, [field]: value } }
 			})
 		},
 		[],
@@ -126,7 +120,10 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone },
 			if (prevState.experiments?.[id] === enabled) {
 				return prevState
 			}
+
+			// console.log("setExperimentEnabled: setChangeDetected -> true")
 			setChangeDetected(true)
+
 			return {
 				...prevState,
 				experiments: { ...prevState.experiments, [id]: enabled },
@@ -134,29 +131,21 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone },
 		})
 	}, [])
 
+	const isSettingValid = !errorMessage
+
 	const handleSubmit = () => {
-		const apiValidationResult = validateApiConfiguration(apiConfiguration)
-
-		const modelIdValidationResult = validateModelId(
-			apiConfiguration,
-			extensionState.glamaModels,
-			extensionState.openRouterModels,
-		)
-
-		setApiErrorMessage(apiValidationResult)
-		setModelIdErrorMessage(modelIdValidationResult)
-
-		if (!apiValidationResult && !modelIdValidationResult) {
+		if (isSettingValid) {
 			vscode.postMessage({ type: "alwaysAllowReadOnly", bool: alwaysAllowReadOnly })
 			vscode.postMessage({ type: "alwaysAllowWrite", bool: alwaysAllowWrite })
 			vscode.postMessage({ type: "alwaysAllowExecute", bool: alwaysAllowExecute })
 			vscode.postMessage({ type: "alwaysAllowBrowser", bool: alwaysAllowBrowser })
 			vscode.postMessage({ type: "alwaysAllowMcp", bool: alwaysAllowMcp })
 			vscode.postMessage({ type: "allowedCommands", commands: allowedCommands ?? [] })
+			vscode.postMessage({ type: "browserToolEnabled", bool: browserToolEnabled })
 			vscode.postMessage({ type: "soundEnabled", bool: soundEnabled })
 			vscode.postMessage({ type: "soundVolume", value: soundVolume })
 			vscode.postMessage({ type: "diffEnabled", bool: diffEnabled })
-			vscode.postMessage({ type: "checkpointsEnabled", bool: checkpointsEnabled })
+			vscode.postMessage({ type: "enableCheckpoints", bool: enableCheckpoints })
 			vscode.postMessage({ type: "browserViewportSize", text: browserViewportSize })
 			vscode.postMessage({ type: "fuzzyMatchThreshold", value: fuzzyMatchThreshold ?? 1.0 })
 			vscode.postMessage({ type: "writeDelayMs", value: writeDelayMs })
@@ -171,26 +160,10 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone },
 			vscode.postMessage({ type: "updateExperimental", values: experiments })
 			vscode.postMessage({ type: "alwaysAllowModeSwitch", bool: alwaysAllowModeSwitch })
 			vscode.postMessage({ type: "upsertApiConfiguration", text: currentApiConfigName, apiConfiguration })
+			// console.log("handleSubmit: setChangeDetected -> false")
 			setChangeDetected(false)
 		}
 	}
-
-	useEffect(() => {
-		setApiErrorMessage(undefined)
-		setModelIdErrorMessage(undefined)
-	}, [apiConfiguration])
-
-	// Initial validation on mount
-	useEffect(() => {
-		const apiValidationResult = validateApiConfiguration(apiConfiguration)
-		const modelIdValidationResult = validateModelId(
-			apiConfiguration,
-			extensionState.glamaModels,
-			extensionState.openRouterModels,
-		)
-		setApiErrorMessage(apiValidationResult)
-		setModelIdErrorMessage(modelIdValidationResult)
-	}, [apiConfiguration, extensionState.glamaModels, extensionState.openRouterModels])
 
 	const checkUnsaveChanges = useCallback(
 		(then: () => void) => {
@@ -204,13 +177,7 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone },
 		[isChangeDetected],
 	)
 
-	useImperativeHandle(
-		ref,
-		() => ({
-			checkUnsaveChanges,
-		}),
-		[checkUnsaveChanges],
-	)
+	useImperativeHandle(ref, () => ({ checkUnsaveChanges }), [checkUnsaveChanges])
 
 	const onConfirmDialogResult = useCallback((confirm: boolean) => {
 		if (confirm) {
@@ -228,10 +195,7 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone },
 			const newCommands = [...currentCommands, commandInput]
 			setCachedStateField("allowedCommands", newCommands)
 			setCommandInput("")
-			vscode.postMessage({
-				type: "allowedCommands",
-				commands: newCommands,
-			})
+			vscode.postMessage({ type: "allowedCommands", commands: newCommands })
 		}
 	}
 
@@ -285,13 +249,14 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone },
 						justifyContent: "space-between",
 						gap: "6px",
 					}}>
-					<VSCodeButton
-						appearance="primary"
-						title={isChangeDetected ? "Save changes" : "Nothing changed"}
+					<Button
+						appearance={isSettingValid ? "primary" : "secondary"}
+						className={!isSettingValid ? "!border-vscode-errorForeground" : ""}
+						title={!isSettingValid ? errorMessage : isChangeDetected ? "Save changes" : "Nothing changed"}
 						onClick={handleSubmit}
-						disabled={!isChangeDetected}>
+						disabled={!isChangeDetected || !isSettingValid}>
 						Save
-					</VSCodeButton>
+					</Button>
 					<VSCodeButton
 						appearance="secondary"
 						title="Discard unsaved changes and close settings panel"
@@ -342,8 +307,8 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone },
 							uriScheme={extensionState.uriScheme}
 							apiConfiguration={apiConfiguration}
 							setApiConfigurationField={setApiConfigurationField}
-							apiErrorMessage={apiErrorMessage}
-							modelIdErrorMessage={modelIdErrorMessage}
+							errorMessage={errorMessage}
+							setErrorMessage={setErrorMessage}
 						/>
 					</div>
 				</div>
@@ -574,59 +539,83 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone },
 				<div style={{ marginBottom: 40 }}>
 					<h3 style={{ color: "var(--vscode-foreground)", margin: "0 0 15px 0" }}>Browser Settings</h3>
 					<div style={{ marginBottom: 15 }}>
-						<label style={{ fontWeight: "500", display: "block", marginBottom: 5 }}>Viewport size</label>
-						<div className="dropdown-container">
-							<Dropdown
-								value={browserViewportSize}
-								onChange={(value: unknown) => {
-									setCachedStateField("browserViewportSize", (value as DropdownOption).value)
-								}}
-								style={{ width: "100%" }}
-								options={[
-									{ value: "1280x800", label: "Large Desktop (1280x800)" },
-									{ value: "900x600", label: "Small Desktop (900x600)" },
-									{ value: "768x1024", label: "Tablet (768x1024)" },
-									{ value: "360x640", label: "Mobile (360x640)" },
-								]}
-							/>
-						</div>
-						<p
-							style={{
-								fontSize: "12px",
-								marginTop: "5px",
-								color: "var(--vscode-descriptionForeground)",
-							}}>
-							Select the viewport size for browser interactions. This affects how websites are displayed
-							and interacted with.
+						<VSCodeCheckbox
+							checked={browserToolEnabled}
+							onChange={(e: any) => setCachedStateField("browserToolEnabled", e.target.checked)}>
+							<span style={{ fontWeight: "500" }}>Enable browser tool</span>
+						</VSCodeCheckbox>
+						<p style={{ fontSize: "12px", marginTop: "5px", color: "var(--vscode-descriptionForeground)" }}>
+							When enabled, Roo can use a browser to interact with websites when using models that support
+							computer use.
 						</p>
 					</div>
+					{browserToolEnabled && (
+						<div
+							style={{
+								marginLeft: 0,
+								paddingLeft: 10,
+								borderLeft: "2px solid var(--vscode-button-background)",
+							}}>
+							<div style={{ marginBottom: 15 }}>
+								<label style={{ fontWeight: "500", display: "block", marginBottom: 5 }}>
+									Viewport size
+								</label>
+								<div className="dropdown-container">
+									<Dropdown
+										value={browserViewportSize}
+										onChange={(value: unknown) => {
+											setCachedStateField("browserViewportSize", (value as DropdownOption).value)
+										}}
+										style={{ width: "100%" }}
+										options={[
+											{ value: "1280x800", label: "Large Desktop (1280x800)" },
+											{ value: "900x600", label: "Small Desktop (900x600)" },
+											{ value: "768x1024", label: "Tablet (768x1024)" },
+											{ value: "360x640", label: "Mobile (360x640)" },
+										]}
+									/>
+								</div>
+								<p
+									style={{
+										fontSize: "12px",
+										marginTop: "5px",
+										color: "var(--vscode-descriptionForeground)",
+									}}>
+									Select the viewport size for browser interactions. This affects how websites are
+									displayed and interacted with.
+								</p>
+							</div>
 
-					<div style={{ marginBottom: 15 }}>
-						<div style={{ display: "flex", flexDirection: "column", gap: "5px" }}>
-							<span style={{ fontWeight: "500" }}>Screenshot quality</span>
-							<div style={{ display: "flex", alignItems: "center", gap: "5px" }}>
-								<input
-									type="range"
-									min="1"
-									max="100"
-									step="1"
-									value={screenshotQuality ?? 75}
-									className="h-2 focus:outline-0 w-4/5 accent-vscode-button-background"
-									onChange={(e) => setCachedStateField("screenshotQuality", parseInt(e.target.value))}
-								/>
-								<span style={{ ...sliderLabelStyle }}>{screenshotQuality ?? 75}%</span>
+							<div style={{ marginBottom: 15 }}>
+								<div style={{ display: "flex", flexDirection: "column", gap: "5px" }}>
+									<span style={{ fontWeight: "500" }}>Screenshot quality</span>
+									<div style={{ display: "flex", alignItems: "center", gap: "5px" }}>
+										<input
+											type="range"
+											min="1"
+											max="100"
+											step="1"
+											value={screenshotQuality ?? 75}
+											className="h-2 focus:outline-0 w-4/5 accent-vscode-button-background"
+											onChange={(e) =>
+												setCachedStateField("screenshotQuality", parseInt(e.target.value))
+											}
+										/>
+										<span style={{ ...sliderLabelStyle }}>{screenshotQuality ?? 75}%</span>
+									</div>
+								</div>
+								<p
+									style={{
+										fontSize: "12px",
+										marginTop: "5px",
+										color: "var(--vscode-descriptionForeground)",
+									}}>
+									Adjust the WebP quality of browser screenshots. Higher values provide clearer
+									screenshots but increase token usage.
+								</p>
 							</div>
 						</div>
-						<p
-							style={{
-								fontSize: "12px",
-								marginTop: "5px",
-								color: "var(--vscode-descriptionForeground)",
-							}}>
-							Adjust the WebP quality of browser screenshots. Higher values provide clearer screenshots
-							but increase token usage.
-						</p>
-					</div>
+					)}
 				</div>
 
 				<div style={{ marginBottom: 40 }}>
@@ -745,6 +734,25 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone },
 
 					<div style={{ marginBottom: 15 }}>
 						<VSCodeCheckbox
+							checked={enableCheckpoints}
+							onChange={(e: any) => {
+								setCachedStateField("enableCheckpoints", e.target.checked)
+							}}>
+							<span style={{ fontWeight: "500" }}>Enable automatic checkpoints</span>
+						</VSCodeCheckbox>
+						<p
+							style={{
+								fontSize: "12px",
+								marginTop: "5px",
+								color: "var(--vscode-descriptionForeground)",
+							}}>
+							When enabled, Roo will automatically create checkpoints during task execution, making it
+							easy to review changes or revert to earlier states.
+						</p>
+					</div>
+
+					<div style={{ marginBottom: 15 }}>
+						<VSCodeCheckbox
 							checked={diffEnabled}
 							onChange={(e: any) => {
 								setCachedStateField("diffEnabled", e.target.checked)
@@ -815,28 +823,6 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone },
 								</div>
 							</div>
 						)}
-
-						<div style={{ marginBottom: 15 }}>
-							<div style={{ display: "flex", alignItems: "center", gap: "5px" }}>
-								<span style={{ color: "var(--vscode-errorForeground)" }}>⚠️</span>
-								<VSCodeCheckbox
-									checked={checkpointsEnabled}
-									onChange={(e: any) => {
-										setCachedStateField("checkpointsEnabled", e.target.checked)
-									}}>
-									<span style={{ fontWeight: "500" }}>Enable experimental checkpoints</span>
-								</VSCodeCheckbox>
-							</div>
-							<p
-								style={{
-									fontSize: "12px",
-									marginTop: "5px",
-									color: "var(--vscode-descriptionForeground)",
-								}}>
-								When enabled, Roo will save a checkpoint whenever a file in the workspace is modified,
-								added or deleted, letting you easily revert to a previous state.
-							</p>
-						</div>
 
 						{Object.entries(experimentConfigsMap)
 							.filter((config) => config[0] !== "DIFF_STRATEGY")

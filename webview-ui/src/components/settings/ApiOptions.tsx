@@ -1,10 +1,8 @@
-import { memo, useCallback, useMemo, useState } from "react"
+import React, { memo, useCallback, useEffect, useMemo, useState } from "react"
 import { useDebounce, useEvent } from "react-use"
 import { Checkbox, Dropdown, Pane, type DropdownOption } from "vscrui"
 import { VSCodeLink, VSCodeRadio, VSCodeRadioGroup, VSCodeTextField } from "@vscode/webview-ui-toolkit/react"
 import * as vscodemodels from "vscode"
-
-import { Slider } from "@/components/ui"
 
 import {
 	ApiConfiguration,
@@ -37,45 +35,73 @@ import { ExtensionMessage } from "../../../../src/shared/ExtensionMessage"
 
 import { vscode } from "../../utils/vscode"
 import VSCodeButtonLink from "../common/VSCodeButtonLink"
-import { OpenRouterModelPicker } from "./OpenRouterModelPicker"
-import OpenAiModelPicker from "./OpenAiModelPicker"
-import { GlamaModelPicker } from "./GlamaModelPicker"
-import { UnboundModelPicker } from "./UnboundModelPicker"
 import { ModelInfoView } from "./ModelInfoView"
 import { DROPDOWN_Z_INDEX } from "./styles"
-import { RequestyModelPicker } from "./RequestyModelPicker"
+import { ModelPicker } from "./ModelPicker"
 import { TemperatureControl } from "./TemperatureControl"
+import { validateApiConfiguration, validateModelId } from "@/utils/validate"
+import { ApiErrorMessage } from "./ApiErrorMessage"
+import { ThinkingBudget } from "./ThinkingBudget"
+
+const modelsByProvider: Record<string, Record<string, ModelInfo>> = {
+	anthropic: anthropicModels,
+	bedrock: bedrockModels,
+	vertex: vertexModels,
+	gemini: geminiModels,
+	"openai-native": openAiNativeModels,
+	deepseek: deepSeekModels,
+	mistral: mistralModels,
+}
 
 interface ApiOptionsProps {
 	uriScheme: string | undefined
-	apiConfiguration: ApiConfiguration | undefined
+	apiConfiguration: ApiConfiguration
 	setApiConfigurationField: <K extends keyof ApiConfiguration>(field: K, value: ApiConfiguration[K]) => void
-	apiErrorMessage?: string
-	modelIdErrorMessage?: string
 	fromWelcomeView?: boolean
+	errorMessage: string | undefined
+	setErrorMessage: React.Dispatch<React.SetStateAction<string | undefined>>
 }
 
 const ApiOptions = ({
 	uriScheme,
 	apiConfiguration,
 	setApiConfigurationField,
-	apiErrorMessage,
-	modelIdErrorMessage,
 	fromWelcomeView,
+	errorMessage,
+	setErrorMessage,
 }: ApiOptionsProps) => {
 	const [ollamaModels, setOllamaModels] = useState<string[]>([])
 	const [lmStudioModels, setLmStudioModels] = useState<string[]>([])
 	const [vsCodeLmModels, setVsCodeLmModels] = useState<vscodemodels.LanguageModelChatSelector[]>([])
+
+	const [openRouterModels, setOpenRouterModels] = useState<Record<string, ModelInfo>>({
+		[openRouterDefaultModelId]: openRouterDefaultModelInfo,
+	})
+
+	const [glamaModels, setGlamaModels] = useState<Record<string, ModelInfo>>({
+		[glamaDefaultModelId]: glamaDefaultModelInfo,
+	})
+
+	const [unboundModels, setUnboundModels] = useState<Record<string, ModelInfo>>({
+		[unboundDefaultModelId]: unboundDefaultModelInfo,
+	})
+
+	const [requestyModels, setRequestyModels] = useState<Record<string, ModelInfo>>({
+		[requestyDefaultModelId]: requestyDefaultModelInfo,
+	})
+
+	const [openAiModels, setOpenAiModels] = useState<Record<string, ModelInfo> | null>(null)
+
 	const [anthropicBaseUrlSelected, setAnthropicBaseUrlSelected] = useState(!!apiConfiguration?.anthropicBaseUrl)
-	const [anthropicThinkingBudget, setAnthropicThinkingBudget] = useState(apiConfiguration?.anthropicThinking)
 	const [azureApiVersionSelected, setAzureApiVersionSelected] = useState(!!apiConfiguration?.azureApiVersion)
 	const [openRouterBaseUrlSelected, setOpenRouterBaseUrlSelected] = useState(!!apiConfiguration?.openRouterBaseUrl)
 	const [isDescriptionExpanded, setIsDescriptionExpanded] = useState(false)
 
-	const inputEventTransform = <E,>(event: E) => (event as { target: HTMLInputElement })?.target?.value as any
 	const noTransform = <T,>(value: T) => value
+	const inputEventTransform = <E,>(event: E) => (event as { target: HTMLInputElement })?.target?.value as any
 	const dropdownEventTransform = <T,>(event: DropdownOption | string | undefined) =>
 		(typeof event == "string" ? event : event?.value) as T
+
 	const handleInputChange = useCallback(
 		<K extends keyof ApiConfiguration, E>(
 			field: K,
@@ -87,15 +113,32 @@ const ApiOptions = ({
 		[setApiConfigurationField],
 	)
 
-	const { selectedProvider, selectedModelId, selectedModelInfo } = useMemo(() => {
-		return normalizeApiConfiguration(apiConfiguration)
-	}, [apiConfiguration])
+	const { selectedProvider, selectedModelId, selectedModelInfo } = useMemo(
+		() => normalizeApiConfiguration(apiConfiguration),
+		[apiConfiguration],
+	)
 
-	// Pull ollama/lmstudio models
-	// Debounced model updates, only executed 250ms after the user stops typing
+	// Debounced refresh model updates, only executed 250ms after the user
+	// stops typing.
 	useDebounce(
 		() => {
-			if (selectedProvider === "ollama") {
+			if (selectedProvider === "openrouter") {
+				vscode.postMessage({ type: "refreshOpenRouterModels" })
+			} else if (selectedProvider === "glama") {
+				vscode.postMessage({ type: "refreshGlamaModels" })
+			} else if (selectedProvider === "unbound") {
+				vscode.postMessage({ type: "refreshUnboundModels" })
+			} else if (selectedProvider === "requesty") {
+				vscode.postMessage({
+					type: "refreshRequestyModels",
+					values: { apiKey: apiConfiguration?.requestyApiKey },
+				})
+			} else if (selectedProvider === "openai") {
+				vscode.postMessage({
+					type: "refreshOpenAiModels",
+					values: { baseUrl: apiConfiguration?.openAiBaseUrl, apiKey: apiConfiguration?.openAiApiKey },
+				})
+			} else if (selectedProvider === "ollama") {
 				vscode.postMessage({ type: "requestOllamaModels", text: apiConfiguration?.ollamaBaseUrl })
 			} else if (selectedProvider === "lmstudio") {
 				vscode.postMessage({ type: "requestLmStudioModels", text: apiConfiguration?.lmStudioBaseUrl })
@@ -104,49 +147,95 @@ const ApiOptions = ({
 			}
 		},
 		250,
-		[selectedProvider, apiConfiguration?.ollamaBaseUrl, apiConfiguration?.lmStudioBaseUrl],
+		[
+			selectedProvider,
+			apiConfiguration?.requestyApiKey,
+			apiConfiguration?.openAiBaseUrl,
+			apiConfiguration?.openAiApiKey,
+			apiConfiguration?.ollamaBaseUrl,
+			apiConfiguration?.lmStudioBaseUrl,
+		],
 	)
-	const handleMessage = useCallback((event: MessageEvent) => {
+
+	useEffect(() => {
+		const apiValidationResult =
+			validateApiConfiguration(apiConfiguration) ||
+			validateModelId(apiConfiguration, glamaModels, openRouterModels, unboundModels, requestyModels)
+
+		setErrorMessage(apiValidationResult)
+	}, [apiConfiguration, glamaModels, openRouterModels, setErrorMessage, unboundModels, requestyModels])
+
+	const onMessage = useCallback((event: MessageEvent) => {
 		const message: ExtensionMessage = event.data
-		if (message.type === "ollamaModels" && Array.isArray(message.ollamaModels)) {
-			const newModels = message.ollamaModels
-			setOllamaModels(newModels)
-		} else if (message.type === "lmStudioModels" && Array.isArray(message.lmStudioModels)) {
-			const newModels = message.lmStudioModels
-			setLmStudioModels(newModels)
-		} else if (message.type === "vsCodeLmModels" && Array.isArray(message.vsCodeLmModels)) {
-			const newModels = message.vsCodeLmModels
-			setVsCodeLmModels(newModels)
+
+		switch (message.type) {
+			case "openRouterModels": {
+				const updatedModels = message.openRouterModels ?? {}
+				setOpenRouterModels({ [openRouterDefaultModelId]: openRouterDefaultModelInfo, ...updatedModels })
+				break
+			}
+			case "glamaModels": {
+				const updatedModels = message.glamaModels ?? {}
+				setGlamaModels({ [glamaDefaultModelId]: glamaDefaultModelInfo, ...updatedModels })
+				break
+			}
+			case "unboundModels": {
+				const updatedModels = message.unboundModels ?? {}
+				setUnboundModels({ [unboundDefaultModelId]: unboundDefaultModelInfo, ...updatedModels })
+				break
+			}
+			case "requestyModels": {
+				const updatedModels = message.requestyModels ?? {}
+				setRequestyModels({ [requestyDefaultModelId]: requestyDefaultModelInfo, ...updatedModels })
+				break
+			}
+			case "openAiModels": {
+				const updatedModels = message.openAiModels ?? []
+				setOpenAiModels(Object.fromEntries(updatedModels.map((item) => [item, openAiModelInfoSaneDefaults])))
+				break
+			}
+			case "ollamaModels":
+				{
+					const newModels = message.ollamaModels ?? []
+					setOllamaModels(newModels)
+				}
+				break
+			case "lmStudioModels":
+				{
+					const newModels = message.lmStudioModels ?? []
+					setLmStudioModels(newModels)
+				}
+				break
+			case "vsCodeLmModels":
+				{
+					const newModels = message.vsCodeLmModels ?? []
+					setVsCodeLmModels(newModels)
+				}
+				break
 		}
 	}, [])
-	useEvent("message", handleMessage)
 
-	const createDropdown = (models: Record<string, ModelInfo>) => {
-		const options: DropdownOption[] = [
-			{ value: "", label: "Select a model..." },
-			...Object.keys(models).map((modelId) => ({
-				value: modelId,
-				label: modelId,
-			})),
-		]
-		return (
-			<Dropdown
-				id="model-id"
-				value={selectedModelId}
-				onChange={(value) => {
-					setApiConfigurationField("apiModelId", typeof value == "string" ? value : value?.value)
-				}}
-				style={{ width: "100%" }}
-				options={options}
-			/>
-		)
-	}
+	useEvent("message", onMessage)
+
+	const selectedProviderModelOptions: DropdownOption[] = useMemo(
+		() =>
+			modelsByProvider[selectedProvider]
+				? [
+						{ value: "", label: "Select a model..." },
+						...Object.keys(modelsByProvider[selectedProvider]).map((modelId) => ({
+							value: modelId,
+							label: modelId,
+						})),
+					]
+				: [],
+		[selectedProvider],
+	)
 
 	return (
 		<div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
 			<div className="dropdown-container">
-				<label htmlFor="api-provider">
-					<span style={{ fontWeight: 500 }}>API Provider</span>
+				<label htmlFor="api-provider" className="font-medium">
+					API Provider
 				</label>
 				<Dropdown
 					id="api-provider"
@@ -173,6 +262,8 @@ const ApiOptions = ({
 				/>
 			</div>
 
+			{errorMessage && <ApiErrorMessage errorMessage={errorMessage} />}
+
 			{selectedProvider === "anthropic" && (
 				<div>
 					<VSCodeTextField
@@ -181,7 +272,7 @@ const ApiOptions = ({
 						type="password"
 						onInput={handleInputChange("apiKey")}
 						placeholder="Enter API Key...">
-						<span style={{ fontWeight: 500 }}>Anthropic API Key</span>
+						<span className="font-medium">Anthropic API Key</span>
 					</VSCodeTextField>
 
 					<Checkbox
@@ -232,7 +323,7 @@ const ApiOptions = ({
 						type="password"
 						onInput={handleInputChange("glamaApiKey")}
 						placeholder="Enter API Key...">
-						<span style={{ fontWeight: 500 }}>Glama API Key</span>
+						<span className="font-medium">Glama API Key</span>
 					</VSCodeTextField>
 					{!apiConfiguration?.glamaApiKey && (
 						<VSCodeButtonLink
@@ -261,7 +352,7 @@ const ApiOptions = ({
 						type="password"
 						onInput={handleInputChange("requestyApiKey")}
 						placeholder="Enter API Key...">
-						<span style={{ fontWeight: 500 }}>Requesty API Key</span>
+						<span className="font-medium">Requesty API Key</span>
 					</VSCodeTextField>
 					<p
 						style={{
@@ -282,7 +373,7 @@ const ApiOptions = ({
 						type="password"
 						onInput={handleInputChange("openAiNativeApiKey")}
 						placeholder="Enter API Key...">
-						<span style={{ fontWeight: 500 }}>OpenAI API Key</span>
+						<span className="font-medium">OpenAI API Key</span>
 					</VSCodeTextField>
 					<p
 						style={{
@@ -310,7 +401,7 @@ const ApiOptions = ({
 						type="password"
 						onInput={handleInputChange("mistralApiKey")}
 						placeholder="Enter API Key...">
-						<span style={{ fontWeight: 500 }}>Mistral API Key</span>
+						<span className="font-medium">Mistral API Key</span>
 					</VSCodeTextField>
 					<p
 						style={{
@@ -339,7 +430,7 @@ const ApiOptions = ({
 								type="url"
 								onInput={handleInputChange("mistralCodestralUrl")}
 								placeholder="Default: https://codestral.mistral.ai">
-								<span style={{ fontWeight: 500 }}>Codestral Base URL (Optional)</span>
+								<span className="font-medium">Codestral Base URL (Optional)</span>
 							</VSCodeTextField>
 							<p
 								style={{
@@ -362,7 +453,7 @@ const ApiOptions = ({
 						type="password"
 						onInput={handleInputChange("openRouterApiKey")}
 						placeholder="Enter API Key...">
-						<span style={{ fontWeight: 500 }}>OpenRouter API Key</span>
+						<span className="font-medium">OpenRouter API Key</span>
 					</VSCodeTextField>
 					{!apiConfiguration?.openRouterApiKey && (
 						<p>
@@ -406,7 +497,7 @@ const ApiOptions = ({
 								/>
 							)}
 							<Checkbox
-								checked={apiConfiguration?.openRouterUseMiddleOutTransform || false}
+								checked={apiConfiguration?.openRouterUseMiddleOutTransform ?? true}
 								onChange={handleInputChange("openRouterUseMiddleOutTransform", noTransform)}>
 								Compress prompts and message chains to the context size (
 								<a href="https://openrouter.ai/docs/transforms">OpenRouter Transforms</a>)
@@ -434,7 +525,7 @@ const ApiOptions = ({
 							style={{ width: "100%" }}
 							onInput={handleInputChange("awsProfile")}
 							placeholder="Enter profile name">
-							<span style={{ fontWeight: 500 }}>AWS Profile Name</span>
+							<span className="font-medium">AWS Profile Name</span>
 						</VSCodeTextField>
 					) : (
 						<>
@@ -445,7 +536,7 @@ const ApiOptions = ({
 								type="password"
 								onInput={handleInputChange("awsAccessKey")}
 								placeholder="Enter Access Key...">
-								<span style={{ fontWeight: 500 }}>AWS Access Key</span>
+								<span className="font-medium">AWS Access Key</span>
 							</VSCodeTextField>
 							<VSCodeTextField
 								value={apiConfiguration?.awsSecretKey || ""}
@@ -453,7 +544,7 @@ const ApiOptions = ({
 								type="password"
 								onInput={handleInputChange("awsSecretKey")}
 								placeholder="Enter Secret Key...">
-								<span style={{ fontWeight: 500 }}>AWS Secret Key</span>
+								<span className="font-medium">AWS Secret Key</span>
 							</VSCodeTextField>
 							<VSCodeTextField
 								value={apiConfiguration?.awsSessionToken || ""}
@@ -461,13 +552,13 @@ const ApiOptions = ({
 								type="password"
 								onInput={handleInputChange("awsSessionToken")}
 								placeholder="Enter Session Token...">
-								<span style={{ fontWeight: 500 }}>AWS Session Token</span>
+								<span className="font-medium">AWS Session Token</span>
 							</VSCodeTextField>
 						</>
 					)}
 					<div className="dropdown-container">
 						<label htmlFor="aws-region-dropdown">
-							<span style={{ fontWeight: 500 }}>AWS Region</span>
+							<span className="font-medium">AWS Region</span>
 						</label>
 						<Dropdown
 							id="aws-region-dropdown"
@@ -519,11 +610,11 @@ const ApiOptions = ({
 						style={{ width: "100%" }}
 						onInput={handleInputChange("vertexProjectId")}
 						placeholder="Enter Project ID...">
-						<span style={{ fontWeight: 500 }}>Google Cloud Project ID</span>
+						<span className="font-medium">Google Cloud Project ID</span>
 					</VSCodeTextField>
 					<div className="dropdown-container">
 						<label htmlFor="vertex-region-dropdown">
-							<span style={{ fontWeight: 500 }}>Google Cloud Region</span>
+							<span className="font-medium">Google Cloud Region</span>
 						</label>
 						<Dropdown
 							id="vertex-region-dropdown"
@@ -571,7 +662,7 @@ const ApiOptions = ({
 						type="password"
 						onInput={handleInputChange("geminiApiKey")}
 						placeholder="Enter API Key...">
-						<span style={{ fontWeight: 500 }}>Gemini API Key</span>
+						<span className="font-medium">Gemini API Key</span>
 					</VSCodeTextField>
 					<p
 						style={{
@@ -599,7 +690,7 @@ const ApiOptions = ({
 						type="url"
 						onInput={handleInputChange("openAiBaseUrl")}
 						placeholder={"Enter base URL..."}>
-						<span style={{ fontWeight: 500 }}>Base URL</span>
+						<span className="font-medium">Base URL</span>
 					</VSCodeTextField>
 					<VSCodeTextField
 						value={apiConfiguration?.openAiApiKey || ""}
@@ -607,9 +698,19 @@ const ApiOptions = ({
 						type="password"
 						onInput={handleInputChange("openAiApiKey")}
 						placeholder="Enter API Key...">
-						<span style={{ fontWeight: 500 }}>API Key</span>
+						<span className="font-medium">API Key</span>
 					</VSCodeTextField>
-					<OpenAiModelPicker />
+					<ModelPicker
+						apiConfiguration={apiConfiguration}
+						setApiConfigurationField={setApiConfigurationField}
+						defaultModelId="gpt-4o"
+						defaultModelInfo={openAiModelInfoSaneDefaults}
+						models={openAiModels}
+						modelIdKey="openAiModelId"
+						modelInfoKey="openAiCustomModelInfo"
+						serviceName="OpenAI"
+						serviceUrl="https://platform.openai.com"
+					/>
 					<div style={{ display: "flex", alignItems: "center" }}>
 						<Checkbox
 							checked={apiConfiguration?.openAiStreamingEnabled ?? true}
@@ -641,12 +742,7 @@ const ApiOptions = ({
 							placeholder={`Default: ${azureOpenAiDefaultApiVersion}`}
 						/>
 					)}
-
-					<div
-						style={{
-							marginTop: 15,
-						}}
-					/>
+					<div className="mt-4" />
 					<Pane
 						title="Model Configuration"
 						open={false}
@@ -697,7 +793,7 @@ const ApiOptions = ({
 												})(),
 											}}
 											title="Maximum number of tokens the model can generate in a single response"
-											onChange={handleInputChange("openAiCustomModelInfo", (e) => {
+											onInput={handleInputChange("openAiCustomModelInfo", (e) => {
 												const value = parseInt((e.target as HTMLInputElement).value)
 												return {
 													...(apiConfiguration?.openAiCustomModelInfo ||
@@ -706,7 +802,7 @@ const ApiOptions = ({
 												}
 											})}
 											placeholder="e.g. 4096">
-											<span style={{ fontWeight: 500 }}>Max Output Tokens</span>
+											<span className="font-medium">Max Output Tokens</span>
 										</VSCodeTextField>
 										<div
 											style={{
@@ -744,7 +840,7 @@ const ApiOptions = ({
 												})(),
 											}}
 											title="Total number of tokens (input + output) the model can process in a single request"
-											onChange={handleInputChange("openAiCustomModelInfo", (e) => {
+											onInput={handleInputChange("openAiCustomModelInfo", (e) => {
 												const value = (e.target as HTMLInputElement).value
 												const parsed = parseInt(value)
 												return {
@@ -756,7 +852,7 @@ const ApiOptions = ({
 												}
 											})}
 											placeholder="e.g. 128000">
-											<span style={{ fontWeight: 500 }}>Context Window Size</span>
+											<span className="font-medium">Context Window Size</span>
 										</VSCodeTextField>
 										<div
 											style={{
@@ -794,7 +890,7 @@ const ApiOptions = ({
 														supportsImages: checked,
 													}
 												})}>
-												<span style={{ fontWeight: 500 }}>Image Support</span>
+												<span className="font-medium">Image Support</span>
 											</Checkbox>
 											<i
 												className="codicon codicon-info"
@@ -838,7 +934,7 @@ const ApiOptions = ({
 														supportsComputerUse: checked,
 													}
 												})}>
-												<span style={{ fontWeight: 500 }}>Computer Use</span>
+												<span className="font-medium">Computer Use</span>
 											</Checkbox>
 											<i
 												className="codicon codicon-info"
@@ -890,9 +986,9 @@ const ApiOptions = ({
 														: "var(--vscode-errorForeground)"
 												})(),
 											}}
-											onChange={handleInputChange("openAiCustomModelInfo", (e) => {
+											onInput={handleInputChange("openAiCustomModelInfo", (e) => {
 												const value = (e.target as HTMLInputElement).value
-												const parsed = parseInt(value)
+												const parsed = parseFloat(value)
 												return {
 													...(apiConfiguration?.openAiCustomModelInfo ??
 														openAiModelInfoSaneDefaults),
@@ -903,7 +999,7 @@ const ApiOptions = ({
 											})}
 											placeholder="e.g. 0.0001">
 											<div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
-												<span style={{ fontWeight: 500 }}>Input Price</span>
+												<span className="font-medium">Input Price</span>
 												<i
 													className="codicon codicon-info"
 													title="Cost per million tokens in the input/prompt. This affects the cost of sending context and instructions to the model."
@@ -935,9 +1031,9 @@ const ApiOptions = ({
 														: "var(--vscode-errorForeground)"
 												})(),
 											}}
-											onChange={handleInputChange("openAiCustomModelInfo", (e) => {
+											onInput={handleInputChange("openAiCustomModelInfo", (e) => {
 												const value = (e.target as HTMLInputElement).value
-												const parsed = parseInt(value)
+												const parsed = parseFloat(value)
 												return {
 													...(apiConfiguration?.openAiCustomModelInfo ||
 														openAiModelInfoSaneDefaults),
@@ -948,7 +1044,7 @@ const ApiOptions = ({
 											})}
 											placeholder="e.g. 0.0002">
 											<div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
-												<span style={{ fontWeight: 500 }}>Output Price</span>
+												<span className="font-medium">Output Price</span>
 												<i
 													className="codicon codicon-info"
 													title="Cost per million tokens in the model's response. This affects the cost of generated content and completions."
@@ -972,18 +1068,6 @@ const ApiOptions = ({
 					/>
 
 					{/* end Model Info Configuration */}
-
-					<p
-						style={{
-							fontSize: "12px",
-							marginTop: 3,
-							color: "var(--vscode-descriptionForeground)",
-						}}>
-						<span style={{ color: "var(--vscode-errorForeground)" }}>
-							(<span style={{ fontWeight: 500 }}>Note:</span> Roo Code uses complex prompts and works best
-							with Claude models. Less capable models may not work as expected.)
-						</span>
-					</p>
 				</div>
 			)}
 
@@ -995,14 +1079,14 @@ const ApiOptions = ({
 						type="url"
 						onInput={handleInputChange("lmStudioBaseUrl")}
 						placeholder={"Default: http://localhost:1234"}>
-						<span style={{ fontWeight: 500 }}>Base URL (optional)</span>
+						<span className="font-medium">Base URL (optional)</span>
 					</VSCodeTextField>
 					<VSCodeTextField
 						value={apiConfiguration?.lmStudioModelId || ""}
 						style={{ width: "100%" }}
 						onInput={handleInputChange("lmStudioModelId")}
 						placeholder={"e.g. meta-llama-3.1-8b-instruct"}>
-						<span style={{ fontWeight: 500 }}>Model ID</span>
+						<span className="font-medium">Model ID</span>
 					</VSCodeTextField>
 					{lmStudioModels.length > 0 && (
 						<VSCodeRadioGroup
@@ -1041,7 +1125,7 @@ const ApiOptions = ({
 						</VSCodeLink>{" "}
 						feature to use it with this extension.{" "}
 						<span style={{ color: "var(--vscode-errorForeground)" }}>
-							(<span style={{ fontWeight: 500 }}>Note:</span> Roo Code uses complex prompts and works best
+							(<span className="font-medium">Note:</span> Roo Code uses complex prompts and works best
 							with Claude models. Less capable models may not work as expected.)
 						</span>
 					</p>
@@ -1056,7 +1140,7 @@ const ApiOptions = ({
 						type="password"
 						onInput={handleInputChange("deepSeekApiKey")}
 						placeholder="Enter API Key...">
-						<span style={{ fontWeight: 500 }}>DeepSeek API Key</span>
+						<span className="font-medium">DeepSeek API Key</span>
 					</VSCodeTextField>
 					<p
 						style={{
@@ -1080,7 +1164,7 @@ const ApiOptions = ({
 				<div>
 					<div className="dropdown-container">
 						<label htmlFor="vscode-lm-model">
-							<span style={{ fontWeight: 500 }}>Language Model</span>
+							<span className="font-medium">Language Model</span>
 						</label>
 						{vsCodeLmModels.length > 0 ? (
 							<Dropdown
@@ -1124,8 +1208,8 @@ const ApiOptions = ({
 								color: "var(--vscode-errorForeground)",
 								fontWeight: 500,
 							}}>
-							Note: This is a very experimental integration and may not work as expected. Please report
-							any issues to the Roo-Code GitHub repository.
+							Note: This is a very experimental integration and provider support will vary. If you get an
+							error about a model not being supported, that's an issue on the provider's end.
 						</p>
 					</div>
 				</div>
@@ -1139,15 +1223,21 @@ const ApiOptions = ({
 						type="url"
 						onInput={handleInputChange("ollamaBaseUrl")}
 						placeholder={"Default: http://localhost:11434"}>
-						<span style={{ fontWeight: 500 }}>Base URL (optional)</span>
+						<span className="font-medium">Base URL (optional)</span>
 					</VSCodeTextField>
 					<VSCodeTextField
 						value={apiConfiguration?.ollamaModelId || ""}
 						style={{ width: "100%" }}
 						onInput={handleInputChange("ollamaModelId")}
 						placeholder={"e.g. llama3.1"}>
-						<span style={{ fontWeight: 500 }}>Model ID</span>
+						<span className="font-medium">Model ID</span>
 					</VSCodeTextField>
+					{errorMessage && (
+						<div className="text-vscode-errorForeground text-sm">
+							<span style={{ fontSize: "2em" }} className={`codicon codicon-close align-middle mr-1`} />
+							{errorMessage}
+						</div>
+					)}
 					{ollamaModels.length > 0 && (
 						<VSCodeRadioGroup
 							value={
@@ -1180,7 +1270,7 @@ const ApiOptions = ({
 							quickstart guide.
 						</VSCodeLink>
 						<span style={{ color: "var(--vscode-errorForeground)" }}>
-							(<span style={{ fontWeight: 500 }}>Note:</span> Roo Code uses complex prompts and works best
+							(<span className="font-medium">Note:</span> Roo Code uses complex prompts and works best
 							with Claude models. Less capable models may not work as expected.)
 						</span>
 					</p>
@@ -1195,7 +1285,7 @@ const ApiOptions = ({
 						type="password"
 						onChange={handleInputChange("unboundApiKey")}
 						placeholder="Enter API Key...">
-						<span style={{ fontWeight: 500 }}>Unbound API Key</span>
+						<span className="font-medium">Unbound API Key</span>
 					</VSCodeTextField>
 					{!apiConfiguration?.unboundApiKey && (
 						<VSCodeButtonLink
@@ -1213,97 +1303,94 @@ const ApiOptions = ({
 						}}>
 						This key is stored locally and only used to make API requests from this extension.
 					</p>
-					<p
-						style={{
-							fontSize: "12px",
-							marginTop: 3,
-							color: "var(--vscode-descriptionForeground)",
-						}}>
-						Check API key to get models
-					</p>
-					<UnboundModelPicker />
 				</div>
 			)}
 
-			{apiErrorMessage && (
-				<p
-					style={{
-						margin: "-10px 0 4px 0",
-						fontSize: 12,
-						color: "var(--vscode-errorForeground)",
-					}}>
-					<span style={{ fontSize: "2em" }} className={`codicon codicon-close align-middle mr-1`} />
-					{apiErrorMessage}
-				</p>
+			{selectedProvider === "openrouter" && (
+				<ModelPicker
+					apiConfiguration={apiConfiguration}
+					setApiConfigurationField={setApiConfigurationField}
+					defaultModelId={openRouterDefaultModelId}
+					defaultModelInfo={openRouterDefaultModelInfo}
+					models={openRouterModels}
+					modelIdKey="openRouterModelId"
+					modelInfoKey="openRouterModelInfo"
+					serviceName="OpenRouter"
+					serviceUrl="https://openrouter.ai/models"
+				/>
 			)}
 
-			{selectedProvider === "glama" && <GlamaModelPicker />}
-			{selectedProvider === "openrouter" && <OpenRouterModelPicker />}
-			{selectedProvider === "requesty" && <RequestyModelPicker />}
+			{selectedProvider === "glama" && (
+				<ModelPicker
+					apiConfiguration={apiConfiguration}
+					setApiConfigurationField={setApiConfigurationField}
+					defaultModelId={glamaDefaultModelId}
+					defaultModelInfo={glamaDefaultModelInfo}
+					models={glamaModels}
+					modelInfoKey="glamaModelInfo"
+					modelIdKey="glamaModelId"
+					serviceName="Glama"
+					serviceUrl="https://glama.ai/models"
+				/>
+			)}
 
-			{selectedProvider !== "glama" &&
-				selectedProvider !== "openrouter" &&
-				selectedProvider !== "requesty" &&
-				selectedProvider !== "openai" &&
-				selectedProvider !== "ollama" &&
-				selectedProvider !== "lmstudio" &&
-				selectedProvider !== "unbound" && (
-					<>
-						<div className="dropdown-container">
-							<label htmlFor="model-id">
-								<span style={{ fontWeight: 500 }}>Model</span>
-							</label>
-							{selectedProvider === "anthropic" && createDropdown(anthropicModels)}
-							{selectedProvider === "bedrock" && createDropdown(bedrockModels)}
-							{selectedProvider === "vertex" && createDropdown(vertexModels)}
-							{selectedProvider === "gemini" && createDropdown(geminiModels)}
-							{selectedProvider === "openai-native" && createDropdown(openAiNativeModels)}
-							{selectedProvider === "deepseek" && createDropdown(deepSeekModels)}
-							{selectedProvider === "mistral" && createDropdown(mistralModels)}
-						</div>
+			{selectedProvider === "unbound" && (
+				<ModelPicker
+					apiConfiguration={apiConfiguration}
+					defaultModelId={unboundDefaultModelId}
+					defaultModelInfo={unboundDefaultModelInfo}
+					models={unboundModels}
+					modelInfoKey="unboundModelInfo"
+					modelIdKey="unboundModelId"
+					serviceName="Unbound"
+					serviceUrl="https://api.getunbound.ai/models"
+					setApiConfigurationField={setApiConfigurationField}
+				/>
+			)}
 
-						<ModelInfoView
-							selectedModelId={selectedModelId}
-							modelInfo={selectedModelInfo}
-							isDescriptionExpanded={isDescriptionExpanded}
-							setIsDescriptionExpanded={setIsDescriptionExpanded}
+			{selectedProvider === "requesty" && (
+				<ModelPicker
+					apiConfiguration={apiConfiguration}
+					setApiConfigurationField={setApiConfigurationField}
+					defaultModelId={requestyDefaultModelId}
+					defaultModelInfo={requestyDefaultModelInfo}
+					models={requestyModels}
+					modelIdKey="requestyModelId"
+					modelInfoKey="requestyModelInfo"
+					serviceName="Requesty"
+					serviceUrl="https://requesty.ai"
+				/>
+			)}
+
+			{selectedProviderModelOptions.length > 0 && (
+				<>
+					<div className="dropdown-container">
+						<label htmlFor="model-id" className="font-medium">
+							Model
+						</label>
+						<Dropdown
+							id="model-id"
+							value={selectedModelId}
+							onChange={(value) => {
+								setApiConfigurationField("apiModelId", typeof value == "string" ? value : value?.value)
+							}}
+							options={selectedProviderModelOptions}
+							className="w-full"
 						/>
-					</>
-				)}
-
-			{selectedProvider === "anthropic" && selectedModelId === "claude-3-7-sonnet-20250219" && (
-				<div className="flex flex-col gap-2 mt-2">
-					<Checkbox
-						checked={!!anthropicThinkingBudget}
-						onChange={(checked) => {
-							const budget = checked ? 16_384 : undefined
-							setAnthropicThinkingBudget(budget)
-							setApiConfigurationField("anthropicThinking", budget)
-						}}>
-						Thinking?
-					</Checkbox>
-					{anthropicThinkingBudget && (
-						<>
-							<div className="text-muted-foreground text-sm">
-								Number of tokens Claude is allowed to use for its internal reasoning process.
-							</div>
-							<div className="flex items-center gap-2">
-								<Slider
-									min={1024}
-									max={anthropicModels["claude-3-7-sonnet-20250219"].maxTokens - 1}
-									step={1024}
-									value={[anthropicThinkingBudget]}
-									onValueChange={(value) => {
-										const budget = value[0]
-										setAnthropicThinkingBudget(budget)
-										setApiConfigurationField("anthropicThinking", budget)
-									}}
-								/>
-								<div className="w-10">{anthropicThinkingBudget}</div>
-							</div>
-						</>
-					)}
-				</div>
+					</div>
+					<ThinkingBudget
+						key={`${selectedProvider}-${selectedModelId}`}
+						apiConfiguration={apiConfiguration}
+						setApiConfigurationField={setApiConfigurationField}
+						modelInfo={selectedModelInfo}
+					/>
+					<ModelInfoView
+						selectedModelId={selectedModelId}
+						modelInfo={selectedModelInfo}
+						isDescriptionExpanded={isDescriptionExpanded}
+						setIsDescriptionExpanded={setIsDescriptionExpanded}
+					/>
+				</>
 			)}
 
 			{!fromWelcomeView && (
@@ -1314,18 +1401,6 @@ const ApiOptions = ({
 						maxValue={2}
 					/>
 				</div>
-			)}
-
-			{modelIdErrorMessage && (
-				<p
-					style={{
-						margin: "-10px 0 4px 0",
-						fontSize: 12,
-						color: "var(--vscode-errorForeground)",
-					}}>
-					<span style={{ fontSize: "2em" }} className={`codicon codicon-close align-middle mr-1`} />
-					{modelIdErrorMessage}
-				</p>
 			)}
 		</div>
 	)
@@ -1348,6 +1423,7 @@ export function normalizeApiConfiguration(apiConfiguration?: ApiConfiguration) {
 	const getProviderData = (models: Record<string, ModelInfo>, defaultId: string) => {
 		let selectedModelId: string
 		let selectedModelInfo: ModelInfo
+
 		if (modelId && modelId in models) {
 			selectedModelId = modelId
 			selectedModelInfo = models[modelId]
@@ -1355,8 +1431,10 @@ export function normalizeApiConfiguration(apiConfiguration?: ApiConfiguration) {
 			selectedModelId = defaultId
 			selectedModelInfo = models[defaultId]
 		}
+
 		return { selectedProvider: provider, selectedModelId, selectedModelInfo }
 	}
+
 	switch (provider) {
 		case "anthropic":
 			return getProviderData(anthropicModels, anthropicDefaultModelId)
@@ -1370,12 +1448,6 @@ export function normalizeApiConfiguration(apiConfiguration?: ApiConfiguration) {
 			return getProviderData(deepSeekModels, deepSeekDefaultModelId)
 		case "openai-native":
 			return getProviderData(openAiNativeModels, openAiNativeDefaultModelId)
-		case "glama":
-			return {
-				selectedProvider: provider,
-				selectedModelId: apiConfiguration?.glamaModelId || glamaDefaultModelId,
-				selectedModelInfo: apiConfiguration?.glamaModelInfo || glamaDefaultModelInfo,
-			}
 		case "mistral":
 			return getProviderData(mistralModels, mistralDefaultModelId)
 		case "openrouter":
@@ -1383,6 +1455,24 @@ export function normalizeApiConfiguration(apiConfiguration?: ApiConfiguration) {
 				selectedProvider: provider,
 				selectedModelId: apiConfiguration?.openRouterModelId || openRouterDefaultModelId,
 				selectedModelInfo: apiConfiguration?.openRouterModelInfo || openRouterDefaultModelInfo,
+			}
+		case "glama":
+			return {
+				selectedProvider: provider,
+				selectedModelId: apiConfiguration?.glamaModelId || glamaDefaultModelId,
+				selectedModelInfo: apiConfiguration?.glamaModelInfo || glamaDefaultModelInfo,
+			}
+		case "unbound":
+			return {
+				selectedProvider: provider,
+				selectedModelId: apiConfiguration?.unboundModelId || unboundDefaultModelId,
+				selectedModelInfo: apiConfiguration?.unboundModelInfo || unboundDefaultModelInfo,
+			}
+		case "requesty":
+			return {
+				selectedProvider: provider,
+				selectedModelId: apiConfiguration?.requestyModelId || requestyDefaultModelId,
+				selectedModelInfo: apiConfiguration?.requestyModelInfo || requestyDefaultModelInfo,
 			}
 		case "openai":
 			return {
@@ -1410,20 +1500,8 @@ export function normalizeApiConfiguration(apiConfiguration?: ApiConfiguration) {
 					: "",
 				selectedModelInfo: {
 					...openAiModelInfoSaneDefaults,
-					supportsImages: false, // VSCode LM API currently doesn't support images
+					supportsImages: false, // VSCode LM API currently doesn't support images.
 				},
-			}
-		case "unbound":
-			return {
-				selectedProvider: provider,
-				selectedModelId: apiConfiguration?.unboundModelId || "",
-				selectedModelInfo: apiConfiguration?.unboundModelInfo || unboundDefaultModelInfo,
-			}
-		case "requesty":
-			return {
-				selectedProvider: provider,
-				selectedModelId: apiConfiguration?.requestyModelId || requestyDefaultModelId,
-				selectedModelInfo: apiConfiguration?.requestyModelInfo || requestyDefaultModelInfo,
 			}
 		default:
 			return getProviderData(anthropicModels, anthropicDefaultModelId)
