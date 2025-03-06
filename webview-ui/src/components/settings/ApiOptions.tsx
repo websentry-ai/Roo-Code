@@ -128,7 +128,10 @@ const ApiOptions = ({
 			} else if (selectedProvider === "glama") {
 				vscode.postMessage({ type: "refreshGlamaModels" })
 			} else if (selectedProvider === "unbound") {
-				vscode.postMessage({ type: "refreshUnboundModels" })
+				vscode.postMessage({
+					type: "refreshUnboundModels",
+					values: { apiKey: apiConfiguration?.unboundApiKey },
+				})
 			} else if (selectedProvider === "requesty") {
 				vscode.postMessage({
 					type: "refreshRequestyModels",
@@ -1128,7 +1131,14 @@ const ApiOptions = ({
 							Get Unbound API Key
 						</VSCodeButtonLink>
 					)}
-					<p>Enter a valid API key to get models</p>
+					<p
+						style={{
+							fontSize: "12px",
+							marginTop: 3,
+							color: "var(--vscode-descriptionForeground)",
+						}}>
+						Enter a valid API key to get models
+					</p>
 				</>
 			)}
 

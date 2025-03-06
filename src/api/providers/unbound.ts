@@ -181,12 +181,9 @@ export class UnboundHandler extends BaseProvider implements SingleCompletionHand
 }
 
 export async function getUnboundModels(apiKey?: string) {
-	console.log("Refreshing Unbound models")
-	console.log("apiKey", apiKey)
 	const provider = ClineProvider.getVisibleInstance()
 	const unboundModelId = await provider?.getGlobalState("unboundModelId")
 	const models: Record<string, ModelInfo> = {}
-	// console.log("unboundModelId", unboundModelId)
 
 	try {
 		const response = await axios.get("https://api.getunbound.ai/models", {
@@ -226,9 +223,8 @@ export async function getUnboundModels(apiKey?: string) {
 	} catch (error) {
 		console.error(`Error fetching Unbound models: ${JSON.stringify(error, Object.getOwnPropertyNames(error), 2)}`)
 	}
-	// console.log("models", models);
+
 	if (unboundModelId && !Object.keys(models).includes(unboundModelId as string)) {
-		console.log("unboundModelId not found in models, resetting")
 		await provider?.updateGlobalState("unboundModelId", "")
 	}
 
