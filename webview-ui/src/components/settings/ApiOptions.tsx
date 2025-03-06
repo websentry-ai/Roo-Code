@@ -27,7 +27,6 @@ import {
 	openRouterDefaultModelInfo,
 	vertexDefaultModelId,
 	vertexModels,
-	unboundDefaultModelId,
 	unboundDefaultModelInfo,
 	requestyDefaultModelId,
 	requestyDefaultModelInfo,
@@ -83,9 +82,7 @@ const ApiOptions = ({
 		[glamaDefaultModelId]: glamaDefaultModelInfo,
 	})
 
-	const [unboundModels, setUnboundModels] = useState<Record<string, ModelInfo>>({
-		[unboundDefaultModelId]: unboundDefaultModelInfo,
-	})
+	const [unboundModels, setUnboundModels] = useState<Record<string, ModelInfo>>({})
 
 	const [requestyModels, setRequestyModels] = useState<Record<string, ModelInfo>>({
 		[requestyDefaultModelId]: requestyDefaultModelInfo,
@@ -128,7 +125,10 @@ const ApiOptions = ({
 			} else if (selectedProvider === "glama") {
 				vscode.postMessage({ type: "refreshGlamaModels" })
 			} else if (selectedProvider === "unbound") {
-				vscode.postMessage({ type: "refreshUnboundModels" })
+				vscode.postMessage({
+					type: "refreshUnboundModels",
+					values: { apiKey: apiConfiguration?.unboundApiKey },
+				})
 			} else if (selectedProvider === "requesty") {
 				vscode.postMessage({
 					type: "refreshRequestyModels",
@@ -155,6 +155,7 @@ const ApiOptions = ({
 			apiConfiguration?.openAiApiKey,
 			apiConfiguration?.ollamaBaseUrl,
 			apiConfiguration?.lmStudioBaseUrl,
+			apiConfiguration?.unboundApiKey,
 		],
 	)
 
@@ -182,7 +183,7 @@ const ApiOptions = ({
 			}
 			case "unboundModels": {
 				const updatedModels = message.unboundModels ?? {}
-				setUnboundModels({ [unboundDefaultModelId]: unboundDefaultModelInfo, ...updatedModels })
+				setUnboundModels({ ...updatedModels })
 				break
 			}
 			case "requestyModels": {
@@ -1127,6 +1128,14 @@ const ApiOptions = ({
 							Get Unbound API Key
 						</VSCodeButtonLink>
 					)}
+					<p
+						style={{
+							fontSize: "12px",
+							marginTop: 3,
+							color: "var(--vscode-descriptionForeground)",
+						}}>
+						Enter a valid API key to get models
+					</p>
 				</>
 			)}
 
@@ -1177,7 +1186,7 @@ const ApiOptions = ({
 			{selectedProvider === "unbound" && (
 				<ModelPicker
 					apiConfiguration={apiConfiguration}
-					defaultModelId={unboundDefaultModelId}
+					defaultModelId={""}
 					defaultModelInfo={unboundDefaultModelInfo}
 					models={unboundModels}
 					modelInfoKey="unboundModelInfo"
@@ -1302,7 +1311,7 @@ export function normalizeApiConfiguration(apiConfiguration?: ApiConfiguration) {
 		case "unbound":
 			return {
 				selectedProvider: provider,
-				selectedModelId: apiConfiguration?.unboundModelId || unboundDefaultModelId,
+				selectedModelId: apiConfiguration?.unboundModelId || "",
 				selectedModelInfo: apiConfiguration?.unboundModelInfo || unboundDefaultModelInfo,
 			}
 		case "requesty":

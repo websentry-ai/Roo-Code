@@ -2,11 +2,12 @@ import { Anthropic } from "@anthropic-ai/sdk"
 import axios from "axios"
 import OpenAI from "openai"
 
-import { ApiHandlerOptions, ModelInfo, unboundDefaultModelId, unboundDefaultModelInfo } from "../../shared/api"
+import { ApiHandlerOptions, ModelInfo, unboundDefaultModelInfo } from "../../shared/api"
 import { convertToOpenAiMessages } from "../transform/openai-format"
 import { ApiStream, ApiStreamUsageChunk } from "../transform/stream"
 import { SingleCompletionHandler } from "../"
 import { BaseProvider } from "./base-provider"
+import { ClineProvider } from "../../core/webview/ClineProvider"
 
 interface UnboundUsage extends OpenAI.CompletionUsage {
 	cache_creation_input_tokens?: number
@@ -134,14 +135,9 @@ export class UnboundHandler extends BaseProvider implements SingleCompletionHand
 	}
 
 	override getModel(): { id: string; info: ModelInfo } {
-		const modelId = this.options.unboundModelId
-		const modelInfo = this.options.unboundModelInfo
-		if (modelId && modelInfo) {
-			return { id: modelId, info: modelInfo }
-		}
 		return {
-			id: unboundDefaultModelId,
-			info: unboundDefaultModelInfo,
+			id: this.options.unboundModelId ?? "",
+			info: this.options.unboundModelInfo ?? unboundDefaultModelInfo,
 		}
 	}
 
@@ -179,11 +175,19 @@ export class UnboundHandler extends BaseProvider implements SingleCompletionHand
 	}
 }
 
-export async function getUnboundModels() {
+export async function getUnboundModels(apiKey?: string) {
+	const provider = ClineProvider.getVisibleInstance()
+	const unboundModelId = await provider?.getGlobalState("unboundModelId")
 	const models: Record<string, ModelInfo> = {}
 
 	try {
-		const response = await axios.get("https://api.getunbound.ai/models")
+		const response = await axios.get("https://api.getunbound.ai/models", {
+			headers: apiKey ? { Authorization: `Bearer ${apiKey}` } : undefined,
+		})
+
+		if (response.data.error) {
+			return models
+		}
 
 		if (response.data) {
 			const rawModels: Record<string, any> = response.data
@@ -217,6 +221,10 @@ export async function getUnboundModels() {
 		}
 	} catch (error) {
 		console.error(`Error fetching Unbound models: ${JSON.stringify(error, Object.getOwnPropertyNames(error), 2)}`)
+	}
+
+	if (unboundModelId && !Object.keys(models).includes(unboundModelId as string)) {
+		await provider?.updateGlobalState("unboundModelId", "")
 	}
 
 	return models
