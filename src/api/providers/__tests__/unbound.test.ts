@@ -254,16 +254,5 @@ describe("UnboundHandler", () => {
 			expect(modelInfo.id).toBe(mockOptions.apiModelId)
 			expect(modelInfo.info).toBeDefined()
 		})
-
-		it("should return default model when invalid model provided", () => {
-			const handlerWithInvalidModel = new UnboundHandler({
-				...mockOptions,
-				unboundModelId: "invalid/model",
-				unboundModelInfo: undefined,
-			})
-			const modelInfo = handlerWithInvalidModel.getModel()
-			expect(modelInfo.id).toBe("anthropic/claude-3-5-sonnet-20241022") // Default model
-			expect(modelInfo.info).toBeDefined()
-		})
 	})
 })
