@@ -27,7 +27,6 @@ import {
 	openRouterDefaultModelInfo,
 	vertexDefaultModelId,
 	vertexModels,
-	unboundDefaultModelId,
 	unboundDefaultModelInfo,
 	requestyDefaultModelId,
 	requestyDefaultModelInfo,
@@ -83,9 +82,7 @@ const ApiOptions = ({
 		[glamaDefaultModelId]: glamaDefaultModelInfo,
 	})
 
-	const [unboundModels, setUnboundModels] = useState<Record<string, ModelInfo>>({
-		[unboundDefaultModelId]: unboundDefaultModelInfo,
-	})
+	const [unboundModels, setUnboundModels] = useState<Record<string, ModelInfo>>({})
 
 	const [requestyModels, setRequestyModels] = useState<Record<string, ModelInfo>>({
 		[requestyDefaultModelId]: requestyDefaultModelInfo,
@@ -186,7 +183,7 @@ const ApiOptions = ({
 			}
 			case "unboundModels": {
 				const updatedModels = message.unboundModels ?? {}
-				setUnboundModels({ [unboundDefaultModelId]: unboundDefaultModelInfo, ...updatedModels })
+				setUnboundModels({ ...updatedModels })
 				break
 			}
 			case "requestyModels": {
@@ -1189,7 +1186,7 @@ const ApiOptions = ({
 			{selectedProvider === "unbound" && (
 				<ModelPicker
 					apiConfiguration={apiConfiguration}
-					defaultModelId={unboundDefaultModelId}
+					defaultModelId={""}
 					defaultModelInfo={unboundDefaultModelInfo}
 					models={unboundModels}
 					modelInfoKey="unboundModelInfo"
