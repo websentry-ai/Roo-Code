@@ -1017,7 +1017,7 @@ export class ClineProvider implements vscode.WebviewViewProvider {
 					case "refreshUnboundModels":
 						const unboundModels = await getUnboundModels(message.values?.apiKey)
 
-						if (Object.keys(unboundModels).length > 0) {
+						if (unboundModels) {
 							const cacheDir = await this.ensureCacheDirectoryExists()
 							await fs.writeFile(
 								path.join(cacheDir, GlobalFileNames.unboundModels),
