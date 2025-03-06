@@ -806,10 +806,10 @@ export class ClineProvider implements vscode.WebviewViewProvider {
 
 						getUnboundModels().then(async (unboundModels) => {
 							if (Object.keys(unboundModels).length > 0) {
-								// await fs.writeFile(
-								// 	path.join(cacheDir, GlobalFileNames.unboundModels),
-								// 	JSON.stringify(unboundModels),
-								// )
+								await fs.writeFile(
+									path.join(cacheDir, GlobalFileNames.unboundModels),
+									JSON.stringify(unboundModels),
+								)
 								await this.postMessageToWebview({ type: "unboundModels", unboundModels })
 
 								const { apiConfiguration } = await this.getState()
