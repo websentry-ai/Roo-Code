@@ -155,6 +155,7 @@ const ApiOptions = ({
 			apiConfiguration?.openAiApiKey,
 			apiConfiguration?.ollamaBaseUrl,
 			apiConfiguration?.lmStudioBaseUrl,
+			apiConfiguration?.unboundApiKey,
 		],
 	)
 
@@ -1127,6 +1128,7 @@ const ApiOptions = ({
 							Get Unbound API Key
 						</VSCodeButtonLink>
 					)}
+					<p>Enter a valid API key to get models</p>
 				</>
 			)}
 
@@ -1302,7 +1304,7 @@ export function normalizeApiConfiguration(apiConfiguration?: ApiConfiguration) {
 		case "unbound":
 			return {
 				selectedProvider: provider,
-				selectedModelId: apiConfiguration?.unboundModelId || unboundDefaultModelId,
+				selectedModelId: apiConfiguration?.unboundModelId || "",
 				selectedModelInfo: apiConfiguration?.unboundModelInfo || unboundDefaultModelInfo,
 			}
 		case "requesty":

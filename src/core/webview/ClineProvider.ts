@@ -804,7 +804,7 @@ export class ClineProvider implements vscode.WebviewViewProvider {
 							}
 						})
 
-						getUnboundModels().then(async (unboundModels) => {
+						getUnboundModels(await this.getSecret("unboundApiKey")).then(async (unboundModels) => {
 							if (Object.keys(unboundModels).length > 0) {
 								await fs.writeFile(
 									path.join(cacheDir, GlobalFileNames.unboundModels),
@@ -1015,7 +1015,8 @@ export class ClineProvider implements vscode.WebviewViewProvider {
 
 						break
 					case "refreshUnboundModels":
-						const unboundModels = await getUnboundModels()
+						console.log("API CALL to fetch Unbound models")
+						const unboundModels = await getUnboundModels(await this.getSecret("unboundApiKey"))
 
 						if (Object.keys(unboundModels).length > 0) {
 							const cacheDir = await this.ensureCacheDirectoryExists()

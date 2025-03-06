@@ -7,6 +7,7 @@ import { convertToOpenAiMessages } from "../transform/openai-format"
 import { ApiStream, ApiStreamUsageChunk } from "../transform/stream"
 import { SingleCompletionHandler } from "../"
 import { BaseProvider } from "./base-provider"
+import { ClineProvider } from "../../core/webview/ClineProvider"
 
 interface UnboundUsage extends OpenAI.CompletionUsage {
 	cache_creation_input_tokens?: number
@@ -179,11 +180,18 @@ export class UnboundHandler extends BaseProvider implements SingleCompletionHand
 	}
 }
 
-export async function getUnboundModels() {
+export async function getUnboundModels(apiKey?: string) {
+	console.log("Refreshing Unbound models")
+	console.log("apiKey", apiKey)
+	const provider = ClineProvider.getVisibleInstance()
+	const unboundModelId = await provider?.getGlobalState("unboundModelId")
 	const models: Record<string, ModelInfo> = {}
+	// console.log("unboundModelId", unboundModelId)
 
 	try {
-		const response = await axios.get("https://api.getunbound.ai/models")
+		const response = await axios.get("https://api.getunbound.ai/models", {
+			headers: apiKey ? { Authorization: `Bearer ${apiKey}` } : undefined,
+		})
 
 		if (response.data) {
 			const rawModels: Record<string, any> = response.data
@@ -217,6 +225,11 @@ export async function getUnboundModels() {
 		}
 	} catch (error) {
 		console.error(`Error fetching Unbound models: ${JSON.stringify(error, Object.getOwnPropertyNames(error), 2)}`)
+	}
+	// console.log("models", models);
+	if (unboundModelId && !Object.keys(models).includes(unboundModelId as string)) {
+		console.log("unboundModelId not found in models, resetting")
+		await provider?.updateGlobalState("unboundModelId", "")
 	}
 
 	return models
