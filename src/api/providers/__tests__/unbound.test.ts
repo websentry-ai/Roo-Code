@@ -1,6 +1,7 @@
-import { UnboundHandler } from "../unbound"
+import { UnboundHandler, getUnboundModels } from "../unbound"
 import { ApiHandlerOptions } from "../../../shared/api"
 import { Anthropic } from "@anthropic-ai/sdk"
+import axios from "axios"
 
 // Mock OpenAI client
 const mockCreate = jest.fn()
@@ -297,5 +298,51 @@ describe("UnboundHandler", () => {
 			expect(modelInfo.id).toBe("anthropic/claude-3-5-sonnet-20241022") // Default model
 			expect(modelInfo.info).toBeDefined()
 		})
+	})
+})
+
+describe("getUnboundModels", () => {
+	beforeEach(() => {
+		jest.clearAllMocks()
+	})
+
+	it("should restrict maxTokens to 8192 if it's greater", async () => {
+		// Mock axios.get to return a model with maxTokens > 8192
+		jest.spyOn(axios, "get").mockResolvedValueOnce({
+			data: {
+				"anthropic/claude-3-opus": {
+					maxTokens: "10000",
+					contextWindow: "200000",
+					supportsPromptCaching: true,
+					inputTokenPrice: "0.01",
+					outputTokenPrice: "0.02",
+				},
+			},
+		})
+
+		const models = await getUnboundModels()
+
+		expect(models["anthropic/claude-3-opus"]).toBeDefined()
+		expect(models["anthropic/claude-3-opus"].maxTokens).toBe(8192) // Should be restricted to 8192
+	})
+
+	it("should keep maxTokens unchanged if it's 4096 or less", async () => {
+		// Mock axios.get to return a model with maxTokens = 4096
+		jest.spyOn(axios, "get").mockResolvedValueOnce({
+			data: {
+				"anthropic/claude-3-haiku": {
+					maxTokens: "4096",
+					contextWindow: "200000",
+					supportsPromptCaching: true,
+					inputTokenPrice: "0.01",
+					outputTokenPrice: "0.02",
+				},
+			},
+		})
+
+		const models = await getUnboundModels()
+
+		expect(models["anthropic/claude-3-haiku"]).toBeDefined()
+		expect(models["anthropic/claude-3-haiku"].maxTokens).toBe(4096) // Should remain unchanged
 	})
 })

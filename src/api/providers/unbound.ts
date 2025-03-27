@@ -210,15 +210,9 @@ export async function getUnboundModels() {
 					cacheReadsPrice: model?.cacheReadPrice ? parseFloat(model.cacheReadPrice) : undefined,
 				}
 
-				switch (true) {
-					case modelId.startsWith("anthropic/"):
-						// Set max tokens to 8192 for supported Anthropic models
-						if (modelInfo.maxTokens !== 4096) {
-							modelInfo.maxTokens = 8192
-						}
-						break
-					default:
-						break
+				// Restrict max tokens to 8192 for all models
+				if (modelInfo.maxTokens && modelInfo.maxTokens > 8192) {
+					modelInfo.maxTokens = 8192
 				}
 
 				models[modelId] = modelInfo
