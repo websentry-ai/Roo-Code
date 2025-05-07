@@ -61,10 +61,6 @@ export const getModels = async (router: RouterName, apiKey: string | undefined =
 		case "glama":
 			models = await getGlamaModels()
 			break
-		case "unbound":
-			// Unbound models endpoint requires an API key to fetch application specific models
-			models = await getUnboundModels(apiKey)
-			break
 	}
 
 	if (Object.keys(models).length > 0) {
