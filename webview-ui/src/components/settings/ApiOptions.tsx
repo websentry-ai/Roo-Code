@@ -329,6 +329,7 @@ const ApiOptions = ({
 					apiConfiguration={apiConfiguration}
 					setApiConfigurationField={setApiConfigurationField}
 					routerModels={routerModels}
+					refetchRouterModels={refetchRouterModels}
 				/>
 			)}
 

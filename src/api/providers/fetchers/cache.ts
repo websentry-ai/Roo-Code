@@ -39,6 +39,11 @@ async function readModels(router: RouterName): Promise<ModelRecord | undefined> 
  * @returns The models from the cache or the fetched models.
  */
 export const getModels = async (router: RouterName, apiKey: string | undefined = undefined): Promise<ModelRecord> => {
+	// Unbound models are fetched without caching to get models based on the current API key
+	if (router === "unbound") {
+		return await getUnboundModels(apiKey)
+	}
+
 	let models = memoryCache.get<ModelRecord>(router)
 	if (models) {
 		// console.log(`[getModels] NodeCache hit for ${router} -> ${Object.keys(models).length}`)
@@ -57,7 +62,8 @@ export const getModels = async (router: RouterName, apiKey: string | undefined =
 			models = await getGlamaModels()
 			break
 		case "unbound":
-			models = await getUnboundModels()
+			// Unbound models endpoint requires an API key to fetch application specific models
+			models = await getUnboundModels(apiKey)
 			break
 	}
 

@@ -293,7 +293,7 @@ export const webviewMessageHandler = async (provider: ClineProvider, message: We
 				getModels("openrouter", apiConfiguration.openRouterApiKey),
 				getModels("requesty", apiConfiguration.requestyApiKey),
 				getModels("glama", apiConfiguration.glamaApiKey),
-				getModels("unbound", apiConfiguration.unboundApiKey),
+				getModels("unbound", message.values?.unboundApiKey || apiConfiguration.unboundApiKey),
 			])
 
 			provider.postMessageToWebview({

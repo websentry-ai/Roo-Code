@@ -5,6 +5,7 @@ import { ApiConfiguration, RouterModels, unboundDefaultModelId } from "@roo/shar
 
 import { useAppTranslation } from "@src/i18n/TranslationContext"
 import { VSCodeButtonLink } from "@src/components/common/VSCodeButtonLink"
+import { vscode } from "@src/utils/vscode"
 
 import { inputEventTransform } from "../transforms"
 import { ModelPicker } from "../ModelPicker"
@@ -13,9 +14,15 @@ type UnboundProps = {
 	apiConfiguration: ApiConfiguration
 	setApiConfigurationField: (field: keyof ApiConfiguration, value: ApiConfiguration[keyof ApiConfiguration]) => void
 	routerModels?: RouterModels
+	refetchRouterModels: () => void
 }
 
-export const Unbound = ({ apiConfiguration, setApiConfigurationField, routerModels }: UnboundProps) => {
+export const Unbound = ({
+	apiConfiguration,
+	setApiConfigurationField,
+	routerModels,
+	refetchRouterModels,
+}: UnboundProps) => {
 	const { t } = useAppTranslation()
 
 	const handleInputChange = useCallback(
@@ -24,9 +31,18 @@ export const Unbound = ({ apiConfiguration, setApiConfigurationField, routerMode
 			transform: (event: E) => ApiConfiguration[K] = inputEventTransform,
 		) =>
 			(event: E | Event) => {
-				setApiConfigurationField(field, transform(event as E))
+				const newValue = transform(event as E)
+				setApiConfigurationField(field, newValue)
+				vscode.postMessage({
+					type: "requestRouterModels",
+					text: "unbound",
+					values: { unboundApiKey: newValue },
+				})
+				setTimeout(() => {
+					refetchRouterModels()
+				}, 100)
 			},
-		[setApiConfigurationField],
+		[setApiConfigurationField, refetchRouterModels],
 	)
 
 	return (
