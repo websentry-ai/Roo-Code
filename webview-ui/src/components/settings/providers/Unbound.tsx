@@ -21,7 +21,6 @@ type UnboundProps = {
 export const Unbound = ({ apiConfiguration, setApiConfigurationField, routerModels }: UnboundProps) => {
 	const { t } = useAppTranslation()
 	const [didRefetch, setDidRefetch] = useState<boolean>()
-	const [currentApiKey, setCurrentApiKey] = useState<string>(apiConfiguration?.unboundApiKey || "")
 	const queryClient = useQueryClient()
 
 	const handleInputChange = useCallback(
@@ -31,15 +30,29 @@ export const Unbound = ({ apiConfiguration, setApiConfigurationField, routerMode
 		) =>
 			(event: E | Event) => {
 				setApiConfigurationField(field, transform(event as E))
-				setCurrentApiKey(String(transform(event as E)))
 			},
 		[setApiConfigurationField],
 	)
 
+	const handleRefresh = useCallback(async () => {
+		vscode.postMessage({ type: "flushRouterModels", text: "unbound" })
+
+		vscode.postMessage({
+			type: "requestRouterModels",
+			text: "unbound",
+		})
+
+		await queryClient.invalidateQueries({ queryKey: ["routerModels"] })
+
+		setDidRefetch(true)
+
+		setTimeout(() => setDidRefetch(false), 2000)
+	}, [queryClient])
+
 	return (
 		<>
 			<VSCodeTextField
-				value={currentApiKey}
+				value={apiConfiguration?.unboundApiKey || ""}
 				type="password"
 				onInput={handleInputChange("unboundApiKey")}
 				placeholder={t("settings:placeholders.apiKey")}
@@ -54,26 +67,19 @@ export const Unbound = ({ apiConfiguration, setApiConfigurationField, routerMode
 					{t("settings:providers.getUnboundApiKey")}
 				</VSCodeButtonLink>
 			)}
-			<Button
-				variant="outline"
-				onClick={() => {
-					vscode.postMessage({ type: "flushRouterModels", text: "unbound" })
-					vscode.postMessage({
-						type: "requestRouterModels",
-						text: "unbound",
-						values: { unboundApiKey: currentApiKey },
-					})
-					queryClient.invalidateQueries({ queryKey: ["routerModels"] })
-					setDidRefetch(true)
-				}}>
-				<div className="flex items-center gap-2">
-					<span className="codicon codicon-refresh" />
-					{t("settings:providers.refreshModels.label")}
-				</div>
-			</Button>
+			<div className="flex justify-end">
+				<Button variant="outline" onClick={handleRefresh} className="w-1/2 max-w-xs">
+					<div className="flex items-center gap-2 justify-center">
+						<span className="codicon codicon-refresh" />
+						{t("settings:providers.refreshModels.label")}
+					</div>
+				</Button>
+			</div>
 			{didRefetch && (
 				<div className="flex items-center text-vscode-gitDecoration-addedResourceForeground">
-					{t("settings:providers.refreshModels.hint")}
+					{t("settings:providers.refreshModels.success", {
+						defaultValue: "Models list updated! You can now select from the latest models.",
+					})}
 				</div>
 			)}
 			<ModelPicker
