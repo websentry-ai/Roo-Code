@@ -35,19 +35,34 @@ export const Unbound = ({ apiConfiguration, setApiConfigurationField, routerMode
 	)
 
 	const handleRefresh = useCallback(async () => {
-		vscode.postMessage({ type: "flushRouterModels", text: "unbound" })
-
 		vscode.postMessage({
-			type: "requestRouterModels",
-			text: "unbound",
+			type: "upsertApiConfiguration",
+			text: "default",
+			apiConfiguration: apiConfiguration,
 		})
+
+		const waitForStateUpdate = new Promise<void>((resolve) => {
+			const messageHandler = (event: MessageEvent) => {
+				const message = event.data
+				if (message.type === "state") {
+					window.removeEventListener("message", messageHandler)
+					resolve()
+				}
+			}
+			window.addEventListener("message", messageHandler)
+		})
+
+		await waitForStateUpdate
+
+		vscode.postMessage({ type: "flushRouterModels", text: "unbound" })
+		vscode.postMessage({ type: "requestRouterModels", text: "unbound" })
 
 		await queryClient.invalidateQueries({ queryKey: ["routerModels"] })
 
 		setDidRefetch(true)
 
 		setTimeout(() => setDidRefetch(false), 2000)
-	}, [queryClient])
+	}, [queryClient, apiConfiguration])
 
 	return (
 		<>
