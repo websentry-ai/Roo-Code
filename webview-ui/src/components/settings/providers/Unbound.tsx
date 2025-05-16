@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react"
+import { useCallback, useState, useRef } from "react"
 import { VSCodeTextField } from "@vscode/webview-ui-toolkit/react"
 import { useQueryClient } from "@tanstack/react-query"
 
@@ -24,6 +24,10 @@ export const Unbound = ({ apiConfiguration, setApiConfigurationField, routerMode
 	const [isInvalidKey, setIsInvalidKey] = useState<boolean>(false)
 	const queryClient = useQueryClient()
 
+	// Add refs to store timer IDs
+	const didRefetchTimerRef = useRef<NodeJS.Timeout>()
+	const invalidKeyTimerRef = useRef<NodeJS.Timeout>()
+
 	const handleInputChange = useCallback(
 		<K extends keyof ProviderSettings, E>(
 			field: K,
@@ -42,10 +46,16 @@ export const Unbound = ({ apiConfiguration, setApiConfigurationField, routerMode
 			apiConfiguration: apiConfiguration,
 		})
 
-		const waitForStateUpdate = new Promise<void>((resolve) => {
+		const waitForStateUpdate = new Promise<void>((resolve, reject) => {
+			const timeoutId = setTimeout(() => {
+				window.removeEventListener("message", messageHandler)
+				reject(new Error("Timeout waiting for state update"))
+			}, 10000) // 10 second timeout
+
 			const messageHandler = (event: MessageEvent) => {
 				const message = event.data
 				if (message.type === "state") {
+					clearTimeout(timeoutId)
 					window.removeEventListener("message", messageHandler)
 					resolve()
 				}
@@ -53,7 +63,11 @@ export const Unbound = ({ apiConfiguration, setApiConfigurationField, routerMode
 			window.addEventListener("message", messageHandler)
 		})
 
-		await waitForStateUpdate
+		try {
+			await waitForStateUpdate
+		} catch (error) {
+			console.error("Failed to save configuration:", error)
+		}
 	}, [apiConfiguration])
 
 	const requestModels = useCallback(async () => {
@@ -102,10 +116,10 @@ export const Unbound = ({ apiConfiguration, setApiConfigurationField, routerMode
 
 		if (requestModelsResult) {
 			setDidRefetch(true)
-			setTimeout(() => setDidRefetch(false), 2000)
+			didRefetchTimerRef.current = setTimeout(() => setDidRefetch(false), 3000)
 		} else {
 			setIsInvalidKey(true)
-			setTimeout(() => setIsInvalidKey(false), 2000)
+			invalidKeyTimerRef.current = setTimeout(() => setIsInvalidKey(false), 3000)
 		}
 	}, [saveConfiguration, requestModels])
 
