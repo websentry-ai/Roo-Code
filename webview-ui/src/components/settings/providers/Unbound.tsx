@@ -57,19 +57,32 @@ export const Unbound = ({ apiConfiguration, setApiConfigurationField, routerMode
 
 	const requestModels = useCallback(async () => {
 		vscode.postMessage({ type: "flushRouterModels", text: "unbound" })
-		vscode.postMessage({ type: "requestRouterModels", text: "unbound" })
+
+		const modelsPromise = new Promise<void>((resolve) => {
+			const messageHandler = (event: MessageEvent) => {
+				const message = event.data
+				if (message.type === "routerModels") {
+					window.removeEventListener("message", messageHandler)
+					resolve()
+				}
+			}
+			window.addEventListener("message", messageHandler)
+		})
+
+		vscode.postMessage({ type: "requestRouterModels" })
+
+		await modelsPromise
 
 		await queryClient.invalidateQueries({ queryKey: ["routerModels"] })
 
 		// After refreshing models, check if current model is in the updated list
-		// If not, select one of the available models
+		// If not, select the first available model
 		const updatedModels = queryClient.getQueryData<{ unbound: RouterModels }>(["routerModels"])?.unbound
 		if (updatedModels && Object.keys(updatedModels).length > 0) {
 			const currentModelId = apiConfiguration?.unboundModelId
 			const modelExists = currentModelId && Object.prototype.hasOwnProperty.call(updatedModels, currentModelId)
 
 			if (!currentModelId || !modelExists) {
-				// Current model not found in the list, select the first available model
 				const firstAvailableModelId = Object.keys(updatedModels)[0]
 				setApiConfigurationField("unboundModelId", firstAvailableModelId)
 			}
