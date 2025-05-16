@@ -34,7 +34,7 @@ export const Unbound = ({ apiConfiguration, setApiConfigurationField, routerMode
 		[setApiConfigurationField],
 	)
 
-	const handleRefresh = useCallback(async () => {
+	const saveConfiguration = useCallback(async () => {
 		vscode.postMessage({
 			type: "upsertApiConfiguration",
 			text: "default",
@@ -53,7 +53,9 @@ export const Unbound = ({ apiConfiguration, setApiConfigurationField, routerMode
 		})
 
 		await waitForStateUpdate
+	}, [apiConfiguration])
 
+	const requestModels = useCallback(async () => {
 		vscode.postMessage({ type: "flushRouterModels", text: "unbound" })
 		vscode.postMessage({ type: "requestRouterModels", text: "unbound" })
 
@@ -72,11 +74,15 @@ export const Unbound = ({ apiConfiguration, setApiConfigurationField, routerMode
 				setApiConfigurationField("unboundModelId", firstAvailableModelId)
 			}
 		}
+	}, [queryClient, apiConfiguration, setApiConfigurationField])
+
+	const handleRefresh = useCallback(async () => {
+		await saveConfiguration()
+		await requestModels()
 
 		setDidRefetch(true)
-
 		setTimeout(() => setDidRefetch(false), 2000)
-	}, [queryClient, apiConfiguration, setApiConfigurationField])
+	}, [saveConfiguration, requestModels])
 
 	return (
 		<>
