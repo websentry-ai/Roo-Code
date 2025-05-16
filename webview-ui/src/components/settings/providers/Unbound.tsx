@@ -59,10 +59,24 @@ export const Unbound = ({ apiConfiguration, setApiConfigurationField, routerMode
 
 		await queryClient.invalidateQueries({ queryKey: ["routerModels"] })
 
+		// After refreshing models, check if current model is in the updated list
+		// If not, select one of the available models
+		const updatedModels = queryClient.getQueryData<{ unbound: RouterModels }>(["routerModels"])?.unbound
+		if (updatedModels && Object.keys(updatedModels).length > 0) {
+			const currentModelId = apiConfiguration?.unboundModelId
+			const modelExists = currentModelId && Object.prototype.hasOwnProperty.call(updatedModels, currentModelId)
+
+			if (!currentModelId || !modelExists) {
+				// Current model not found in the list, select the first available model
+				const firstAvailableModelId = Object.keys(updatedModels)[0]
+				setApiConfigurationField("unboundModelId", firstAvailableModelId)
+			}
+		}
+
 		setDidRefetch(true)
 
 		setTimeout(() => setDidRefetch(false), 2000)
-	}, [queryClient, apiConfiguration])
+	}, [queryClient, apiConfiguration, setApiConfigurationField])
 
 	return (
 		<>
