@@ -21,6 +21,7 @@ type UnboundProps = {
 export const Unbound = ({ apiConfiguration, setApiConfigurationField, routerModels }: UnboundProps) => {
 	const { t } = useAppTranslation()
 	const [didRefetch, setDidRefetch] = useState<boolean>()
+	const [isInvalidKey, setIsInvalidKey] = useState<boolean>(false)
 	const queryClient = useQueryClient()
 
 	const handleInputChange = useCallback(
@@ -87,14 +88,25 @@ export const Unbound = ({ apiConfiguration, setApiConfigurationField, routerMode
 				setApiConfigurationField("unboundModelId", firstAvailableModelId)
 			}
 		}
+
+		if (!updatedModels || Object.keys(updatedModels).includes("error")) {
+			return false
+		} else {
+			return true
+		}
 	}, [queryClient, apiConfiguration, setApiConfigurationField])
 
 	const handleRefresh = useCallback(async () => {
 		await saveConfiguration()
-		await requestModels()
+		const requestModelsResult = await requestModels()
 
-		setDidRefetch(true)
-		setTimeout(() => setDidRefetch(false), 2000)
+		if (requestModelsResult) {
+			setDidRefetch(true)
+			setTimeout(() => setDidRefetch(false), 2000)
+		} else {
+			setIsInvalidKey(true)
+			setTimeout(() => setIsInvalidKey(false), 2000)
+		}
 	}, [saveConfiguration, requestModels])
 
 	return (
@@ -124,9 +136,16 @@ export const Unbound = ({ apiConfiguration, setApiConfigurationField, routerMode
 				</Button>
 			</div>
 			{didRefetch && (
-				<div className="flex items-center text-vscode-gitDecoration-addedResourceForeground">
+				<div className="flex items-center text-vscode-charts-green">
 					{t("settings:providers.refreshModels.success", {
 						defaultValue: "Models list updated! You can now select from the latest models.",
+					})}
+				</div>
+			)}
+			{isInvalidKey && (
+				<div className="flex items-center text-vscode-errorForeground">
+					{t("settings:providers.invalidApiKey", {
+						defaultValue: "Invalid API key. Please check your API key and try again.",
 					})}
 				</div>
 			)}
