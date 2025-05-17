@@ -151,16 +151,12 @@ export const Unbound = ({ apiConfiguration, setApiConfigurationField, routerMode
 			</div>
 			{didRefetch && (
 				<div className="flex items-center text-vscode-charts-green">
-					{t("settings:providers.refreshModels.success", {
-						defaultValue: "Models list updated! You can now select from the latest models.",
-					})}
+					{t("settings:providers.unboundRefreshModelsSuccess")}
 				</div>
 			)}
 			{isInvalidKey && (
 				<div className="flex items-center text-vscode-errorForeground">
-					{t("settings:providers.invalidApiKey", {
-						defaultValue: "Invalid API key. Please check your API key and try again.",
-					})}
+					{t("settings:providers.unboundInvalidApiKey")}
 				</div>
 			)}
 			<ModelPicker
