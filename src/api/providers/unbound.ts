@@ -11,6 +11,8 @@ import { addCacheBreakpoints as addGeminiCacheBreakpoints } from "../transform/c
 import type { SingleCompletionHandler, ApiHandlerCreateMessageMetadata } from "../index"
 import { RouterProvider } from "./router-provider"
 
+const ORIGIN_APP = "roo-code"
+
 const DEFAULT_HEADERS = {
 	"X-Unbound-Metadata": JSON.stringify({ labels: [{ key: "app", value: "roo-code" }] }),
 }
@@ -80,7 +82,7 @@ export class UnboundHandler extends RouterProvider implements SingleCompletionHa
 			messages: openAiMessages,
 			stream: true,
 			unbound_metadata: {
-				originApp: "roo-code",
+				originApp: ORIGIN_APP,
 				taskId: metadata?.taskId,
 				mode: metadata?.mode,
 			},
@@ -131,7 +133,7 @@ export class UnboundHandler extends RouterProvider implements SingleCompletionHa
 				model: modelId.split("/")[1],
 				messages: [{ role: "user", content: prompt }],
 				unbound_metadata: {
-					originApp: "roo-code",
+					originApp: ORIGIN_APP,
 				},
 			}
 
