@@ -20,7 +20,7 @@ export async function getUnboundModels(apiKey?: string | null): Promise<Record<s
 			for (const [modelId, model] of Object.entries(rawModels)) {
 				const modelInfo: ModelInfo = {
 					maxTokens: model?.maxTokens ? parseInt(model.maxTokens) : undefined,
-					contextWindow: model?.contextWindow ? parseInt(model.contextWindow) : 0,
+					contextWindow: model?.contextWindow ? parseInt(model.contextWindow) : 128_000,
 					supportsImages: model?.supportsImages ?? false,
 					supportsPromptCache: model?.supportsPromptCaching ?? false,
 					supportsComputerUse: model?.supportsComputerUse ?? false,
