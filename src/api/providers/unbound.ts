@@ -28,7 +28,6 @@ interface UnboundUsage extends OpenAI.CompletionUsage {
 type UnboundChatCompletionCreateParamsStreaming = OpenAI.Chat.Completions.ChatCompletionCreateParamsStreaming & {
 	unbound_metadata: {
 		originApp: string
-		taskId?: string
 		mode?: string
 		threadId?: string
 	}
