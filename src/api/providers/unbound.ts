@@ -30,6 +30,7 @@ type UnboundChatCompletionCreateParamsStreaming = OpenAI.Chat.Completions.ChatCo
 		originApp: string
 		taskId?: string
 		mode?: string
+		threadId?: string
 	}
 }
 
@@ -90,8 +91,8 @@ export class UnboundHandler extends RouterProvider implements SingleCompletionHa
 			stream: true,
 			unbound_metadata: {
 				originApp: ORIGIN_APP,
-				taskId: metadata?.taskId,
 				mode: metadata?.mode,
+				threadId: metadata?.taskId,
 			},
 		}
 
